@@ -31,7 +31,7 @@ export const PRESET_IDEAS: LocalizedPresetIdea[] = [
     category: 'Santé & Forme',
     title: 'Arrêtez le café à jeun',
     prompt: 'Pourquoi boire son café immédiatement au réveil sabote votre cortisol et l\'astuce simple à faire avant pour tripler votre énergie.',
-    tone: 'choc',
+    tone: 'viral',
     language: 'français',
   },
   {
@@ -68,7 +68,7 @@ export const PRESET_IDEAS: LocalizedPresetIdea[] = [
     category: 'صحة ولياقة',
     title: 'توقف عن شرب القهوة على الريق',
     prompt: 'لماذا شرب القهوة فور الاستيقاظ يرفع هرمون التوتر ويقلل طاقتك ظهراً والبديل الصحي البسيط الذي يضاعف نشاطك.',
-    tone: 'choc',
+    tone: 'viral',
     language: 'arabe',
   },
   {

@@ -9,6 +9,7 @@ import {
   ArrowRight,
   TrendingUp,
   Globe2,
+  AlertCircle,
 } from 'lucide-react';
 import { PRESET_IDEAS } from '../data/presetIdeas';
 import { PresetIdea } from '../types/reel';
@@ -22,6 +23,7 @@ interface IdeaGeneratorProps {
     voiceName: string;
   }) => Promise<void>;
   isLoading: boolean;
+  errorMessage?: string | null;
 }
 
 const LANGUAGES = [
@@ -57,11 +59,12 @@ const VOICES = [
 export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
   onGenerate,
   isLoading,
+  errorMessage,
 }) => {
   const [language, setLanguage] = useState<'arabe' | 'français' | 'anglais'>('arabe');
   const [ideaText, setIdeaText] = useState('');
   const [tone, setTone] = useState('viral');
-  const [targetAudience, setTargetAudience] = useState('Grand public');
+  const [targetAudience, setTargetAudience] = useState('الجمهور العام');
   const [voiceName, setVoiceName] = useState('Fenrir');
 
   const isArabic = language === 'arabe';
@@ -89,6 +92,7 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
 
   const handleLanguageChange = (newLang: 'arabe' | 'français' | 'anglais') => {
     setLanguage(newLang);
+    setTargetAudience(newLang === 'arabe' ? 'الجمهور العام' : 'Grand public');
     // Auto populate idea if empty or switching languages
     const firstMatchingPreset = PRESET_IDEAS.find((p) => p.language === newLang);
     if (firstMatchingPreset && (!ideaText.trim() || PRESET_IDEAS.some(p => p.prompt === ideaText))) {
@@ -272,6 +276,18 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
           </select>
         </div>
       </div>
+
+      {/* Inline Error Message */}
+      {errorMessage && (
+        <div
+          role="alert"
+          dir={isArabic ? 'rtl' : 'ltr'}
+          className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/50 dark:border-rose-800/70 dark:text-rose-300 text-xs font-semibold flex items-start gap-2"
+        >
+          <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       {/* Submit Button */}
       <button

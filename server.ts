@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
 import fs from "fs";
 import { exec } from "child_process";
@@ -16,11 +16,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "150mb" }));
 app.use(express.urlencoded({ limit: "150mb", extended: true }));
 app.use(express.raw({ type: ["video/*", "application/octet-stream"], limit: "150mb" }));
+
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true });
+});
 
 /**
  * Helper: Synthesize a complete 20.0-second 24kHz 16-bit mono WAV buffer in Node.js
@@ -312,9 +316,63 @@ function isAuthError(err: any): boolean {
     msg.includes("API key not valid") ||
     msg.includes("UNAUTHENTICATED") ||
     msg.includes("API_KEY_INVALID") ||
+    msg.includes("PERMISSION_DENIED") ||
     msg.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED")
   );
 }
+
+function isQuotaError(err: any): boolean {
+  const status = err?.status || err?.code;
+  const msg = String(err?.message || "");
+  return status === 429 || msg.includes("RESOURCE_EXHAUSTED");
+}
+
+function isTransientError(err: any): boolean {
+  const status = Number(err?.status || err?.code);
+  const msg = String(err?.message || "");
+  return (
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    msg.includes("UNAVAILABLE") ||
+    msg.includes("DEADLINE_EXCEEDED") ||
+    msg.includes("fetch failed") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("ECONNRESET")
+  );
+}
+
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let lastErr: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      if (attempt < maxRetries && isTransientError(err)) {
+        const delayMs = 800 * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+function parseJsonResponse(rawText?: string): any {
+  const cleaned = (rawText || "{}")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  return JSON.parse(cleaned || "{}");
+}
+
+const VALID_THEMES = new Set(["electric", "sunset", "dark-luxe", "emerald", "crimson", "cyber"]);
+const VALID_SFX = new Set(["whoosh", "ding", "pop", "impact", "none"]);
 
 // Endpoint: Generate complete 20-second Facebook Reel breakdown
 app.post("/api/generate-reel", async (req, res) => {
@@ -325,20 +383,23 @@ app.post("/api/generate-reel", async (req, res) => {
       targetAudience = "Grand public",
       language = "français",
       visualStyle = "cyber",
-    } = req.body;
+    } = req.body || {};
 
     if (!idea || typeof idea !== "string" || !idea.trim()) {
       return res.status(400).json({ error: "L'idée de texte est requise." });
     }
 
-    const ai = getAiClient();
-    if (!ai) {
-      const mockReel = createFallbackReel(idea, tone, language);
-      return res.json(mockReel);
-    }
-
     const isArabicLang =
       language === "arabe" || language === "ar" || /[\u0600-\u06FF]/.test(idea);
+
+    const ai = getAiClient();
+    if (!ai) {
+      return res.status(503).json({
+        error: isArabicLang
+          ? "مفتاح Gemini API غير مُعدّ. يرجى التحقق من Settings > Secrets."
+          : "Clé API Gemini non configurée. Veuillez vérifier Settings > Secrets.",
+      });
+    }
 
     const systemInstruction = `Tu es le meilleur expert mondial en création de Réels Facebook courts et viraux de EXACTEMENT 20 secondes.
 Sur Facebook, la rétention chute après 3 secondes si l'accroche n'est pas explosive.
@@ -365,12 +426,14 @@ Ton : ${tone}
 Audience cible : ${targetAudience}
 Style visuel : ${visualStyle}`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-4-hydrogen",
-      contents: prompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
+    const response = await withRetry(() =>
+      ai.models.generateContent({
+        model: "gemini-4-hydrogen",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -473,9 +536,10 @@ Style visuel : ${visualStyle}`;
           ],
         },
       },
-    });
+      })
+    );
 
-    const parsedData = JSON.parse(response.text || "{}");
+    const parsedData = parseJsonResponse(response.text);
 
     // Guarantee exact 4 scenes spanning 0-3s, 3-8s, 8-15s, 15-20s
     const defaultTimings = [
@@ -488,6 +552,8 @@ Style visuel : ${visualStyle}`;
     const rawScenes = Array.isArray(parsedData.scenes) ? parsedData.scenes : [];
     const adjustedScenes = defaultTimings.map((timing, idx) => {
       const scene = rawScenes[idx] || {};
+      const defaultSfx = idx === 0 ? "whoosh" : idx === 1 ? "impact" : idx === 2 ? "ding" : "pop";
+      const defaultTheme = idx === 0 ? "crimson" : idx === 1 ? "dark-luxe" : idx === 2 ? "emerald" : "electric";
       return {
         id: `scene-${idx + 1}-${Date.now()}`,
         order: idx + 1,
@@ -499,33 +565,42 @@ Style visuel : ${visualStyle}`;
         narration: scene.narration || "",
         overlayTitle: scene.overlayTitle || "",
         overlaySubtitle: scene.overlaySubtitle || "",
-        badge: scene.badge || "🔥 ASTUCE",
-        soundEffect: scene.soundEffect || (idx === 0 ? "whoosh" : idx === 1 ? "impact" : idx === 2 ? "ding" : "pop"),
-        visualTheme: scene.visualTheme || (idx === 0 ? "crimson" : idx === 1 ? "dark-luxe" : idx === 2 ? "emerald" : "electric"),
+        badge: scene.badge || (isArabicLang ? "🔥 نصيحة" : "🔥 ASTUCE"),
+        soundEffect: VALID_SFX.has(scene.soundEffect) ? scene.soundEffect : defaultSfx,
+        visualTheme: VALID_THEMES.has(scene.visualTheme) ? scene.visualTheme : defaultTheme,
       };
     });
 
+    const normalizedHashtags = Array.isArray(parsedData.hashtags) && parsedData.hashtags.length > 0
+      ? parsedData.hashtags
+          .map((tag: string) => {
+            const clean = String(tag || "").trim();
+            if (!clean) return "";
+            return clean.startsWith("#") ? clean : `#${clean}`;
+          })
+          .filter(Boolean)
+      : isArabicLang
+        ? ["#ريلز_فيسبوك", "#ريلز", "#فيسبوك", "#نصائح_سريعة"]
+        : ["#ReelsFacebook", "#AstuceDuJour", "#Viral", "#FacebookReels"];
+
     const result = {
       id: `reel-${Date.now()}`,
-      title: parsedData.title || "Réel Facebook 20s",
+      title: parsedData.title || (isArabicLang ? "ريل فيسبوك 20 ثانية" : "Réel Facebook 20s"),
       idea,
       tone,
       language: isArabicLang ? "arabe" : language,
-      hookRating: parsedData.hookRating || "A+ Viral",
-      viralityScore: parsedData.viralityScore || 94,
+      hookRating: parsedData.hookRating || (isArabicLang ? "A+ فيروسي" : "A+ Viral"),
+      viralityScore: Number(parsedData.viralityScore) || 94,
       retentionTip:
         parsedData.retentionTip ||
-        "Les premières 3 secondes déterminent 80% des vues sur Facebook.",
+        (isArabicLang
+          ? "أول 3 ثوانٍ تحدد 80% من مشاهدات الريل على فيسبوك."
+          : "Les premières 3 secondes déterminent 80% des vues sur Facebook."),
       recommendedBgmTrack: parsedData.recommendedBgmTrack || "Électro Hype Beat",
       fbPostCaption:
         parsedData.fbPostCaption ||
         `${parsedData.title}\n\nRegarde jusqu'à la fin ! 💡\n\nPartage avec un ami qui en a besoin. 👇`,
-      hashtags: parsedData.hashtags || [
-        "#ReelsFacebook",
-        "#AstuceDuJour",
-        "#Viral",
-        "#Motivation",
-      ],
+      hashtags: normalizedHashtags,
       scenes: adjustedScenes,
       subtitleStyle: "hormozi",
       musicMood: "energetic",
@@ -533,17 +608,31 @@ Style visuel : ${visualStyle}`;
 
     res.json(result);
   } catch (error: any) {
+    console.error("Error generating reel:", error?.message || error);
+    const isArabicLang =
+      req.body?.language === "arabe" ||
+      req.body?.language === "ar" ||
+      /[\u0600-\u06FF]/.test(String(req.body?.idea || ""));
+
     if (isAuthError(error)) {
-      console.warn("Gemini API key unavailable or invalid; using smart local reel generator.");
-    } else {
-      console.warn("Gemini generation fallback triggered:", error?.message || error);
+      return res.status(401).json({
+        error: isArabicLang
+          ? "مفتاح Gemini API غير صالح. يرجى التحقق منه في Settings > Secrets."
+          : "Clé API Gemini invalide. Veuillez vérifier votre clé dans Settings > Secrets.",
+      });
     }
-    const fallback = createFallbackReel(
-      req.body?.idea || "Idée de test",
-      req.body?.tone || "viral",
-      req.body?.language || "français"
-    );
-    res.json(fallback);
+    if (isQuotaError(error)) {
+      return res.status(429).json({
+        error: isArabicLang
+          ? "تم تجاوز الحد المسموح به مؤقتاً. يرجى المحاولة بعد قليل."
+          : "Quota Gemini temporairement atteint. Veuillez réessayer dans quelques instants.",
+      });
+    }
+    res.status(502).json({
+      error: isArabicLang
+        ? "تعذر الاتصال بخدمة الذكاء الاصطناعي حالياً. يرجى المحاولة مجدداً."
+        : "Impossible de générer le Réel pour le moment. Veuillez réessayer.",
+    });
   }
 });
 
@@ -619,372 +708,60 @@ app.post("/api/generate-voiceover", async (req, res) => {
 // Endpoint: Refine a single scene (e.g., make punchier, change hook, shorten)
 app.post("/api/refine-scene", async (req, res) => {
   try {
-    const { currentScene, instruction } = req.body;
+    const { currentScene, instruction } = req.body || {};
 
     const ai = getAiClient();
     if (!ai) {
-      return res.json({
-        ...currentScene,
-        overlayTitle: `🔥 ${currentScene.overlayTitle}`,
+      return res.status(503).json({
+        error: "Clé API Gemini non configurée. Veuillez vérifier Settings > Secrets.",
       });
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-4-hydrogen",
-      contents: `Réécris cette scène de Réel Facebook (${currentScene.duration} secondes) selon cette consigne : "${
-        instruction || "Rends-la plus percutante"
-      }".
+    const response = await withRetry(() =>
+      ai.models.generateContent({
+        model: "gemini-4-hydrogen",
+        contents: `Réécris cette scène de Réel Facebook (${currentScene.duration} secondes) selon cette consigne : "${
+          instruction || "Rends-la plus percutante"
+        }".
 Scène actuelle :
 - Narration : "${currentScene.narration}"
 - Titre écran : "${currentScene.overlayTitle}"
 - Sous-titre écran : "${currentScene.overlaySubtitle}"
 - Badge : "${currentScene.badge}"`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            narration: { type: Type.STRING },
-            overlayTitle: { type: Type.STRING },
-            overlaySubtitle: { type: Type.STRING },
-            badge: { type: Type.STRING },
-            soundEffect: { type: Type.STRING },
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              narration: { type: Type.STRING },
+              overlayTitle: { type: Type.STRING },
+              overlaySubtitle: { type: Type.STRING },
+              badge: { type: Type.STRING },
+              soundEffect: { type: Type.STRING },
+            },
+            required: ["narration", "overlayTitle", "overlaySubtitle", "badge", "soundEffect"],
           },
-          required: ["narration", "overlayTitle", "overlaySubtitle", "badge", "soundEffect"],
         },
-      },
-    });
+      })
+    );
 
-    const refined = JSON.parse(response.text || "{}");
+    const refined = parseJsonResponse(response.text);
     res.json({
       ...currentScene,
       ...refined,
+      soundEffect: VALID_SFX.has(refined.soundEffect) ? refined.soundEffect : currentScene.soundEffect,
     });
   } catch (error: any) {
+    console.warn("Error refining scene:", error?.message || error);
     if (isAuthError(error)) {
-      console.warn("Gemini refine key unavailable or invalid; returning boosted local scene.");
-      const { currentScene } = req.body || {};
-      return res.json({
-        ...currentScene,
-        overlayTitle: currentScene?.overlayTitle?.startsWith("🔥")
-          ? currentScene.overlayTitle
-          : `🔥 ${currentScene?.overlayTitle || ""}`,
+      return res.status(401).json({
+        error: "Clé API Gemini invalide. Veuillez vérifier Settings > Secrets.",
       });
     }
-    console.warn("Error refining scene:", error?.message || error);
-    res.status(500).json({ error: error.message || "Erreur d'optimisation" });
+    res.status(502).json({ error: error?.message || "Erreur d'optimisation" });
   }
 });
-
-function createFallbackReel(idea: string, tone: string, language: string) {
-  const cleanIdea = (idea || "").trim().replace(/\s+/g, " ");
-  const isArabic =
-    language === "arabe" || language === "ar" || /[\u0600-\u06FF]/.test(cleanIdea);
-  const isEnglish =
-    !isArabic && (language === "anglais" || language === "en" || language === "english");
-
-  // Break the user's idea into natural clauses/phrases so every scene reflects their actual input
-  const rawParts = cleanIdea
-    .split(/[.!؟?;\n،,]+/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 2);
-
-  const truncateWords = (text: string, maxLen: number) => {
-    if (text.length <= maxLen) return text;
-    const cut = text.slice(0, maxLen);
-    const lastSpace = cut.lastIndexOf(" ");
-    return (lastSpace > 15 ? cut.slice(0, lastSpace) : cut).trim() + "…";
-  };
-
-  const words = cleanIdea.split(/\s+/).filter(Boolean);
-  const shortTopic = words.slice(0, 6).join(" ");
-  const headlineTopic = words.slice(0, 4).join(" ");
-  const part1 = rawParts[0] || cleanIdea;
-  const part2 = rawParts[1] || cleanIdea;
-  const part3 = rawParts[2] || rawParts[1] || cleanIdea;
-  const sub1 = truncateWords(part1, 46);
-  const sub2 = truncateWords(part3, 50);
-
-  // Extract topic-based hashtags from the user's idea
-  const stopWords = new Set([
-    "pour", "avec", "dans", "sans", "comment", "pourquoi", "votre", "notre", "cette", "mais", "plus", "tout", "faire",
-    "this", "that", "with", "from", "your", "about", "what", "when", "have", "will",
-    "على", "في", "من", "إلى", "عن", "كيف", "لماذا", "هذا", "هذه", "التي", "الذي", "مع", "أو", "كل",
-  ]);
-  const dynamicTags = words
-    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ""))
-    .filter((w) => w.length >= 4 && !stopWords.has(w.toLowerCase()))
-    .slice(0, 3)
-    .map((w) => `#${w}`);
-
-  const now = Date.now();
-
-  if (isArabic) {
-    const toneConfig: Record<string, { hook: string; badge1: string; theme1: string; rating: string }> = {
-      viral: { hook: `توقف! ${headlineTopic}`, badge1: "🚨 انتبه فوراً", theme1: "crimson", rating: "A+ فيروسي" },
-      "éducatif": { hook: `تعلم ${headlineTopic}`, badge1: "💡 معلومة ذهبية", theme1: "electric", rating: "A+ تعليمي" },
-      business: { hook: `سر نجاح ${headlineTopic}`, badge1: "💼 مال وأعمال", theme1: "emerald", rating: "A+ بيزنس" },
-      humour: { hook: `الحقيقة المضحكة: ${headlineTopic}`, badge1: "😂 واقع لا يصدق", theme1: "sunset", rating: "A+ ممتع" },
-      "mystérieux": { hook: `السر المخفي: ${headlineTopic}`, badge1: "🔮 سر خطير", theme1: "dark-luxe", rating: "A+ تشويق" },
-    };
-    const cfg = toneConfig[tone] || toneConfig.viral;
-
-    return {
-      id: `reel-${now}`,
-      title: shortTopic || "ريل فيسبوك احترافي",
-      idea: cleanIdea,
-      tone,
-      language: "arabe",
-      hookRating: cfg.rating,
-      viralityScore: 96,
-      retentionTip:
-        "في فيسبوك ريلز، عرض الفكرة الرئيسية باللون الأصفر في أول 3 ثوانٍ يرفع نسبة إكمال الفيديو بأكثر من 85%.",
-      recommendedBgmTrack: "إيقاع حماسي سريع (120 BPM)",
-      fbPostCaption: `⚡ ${cleanIdea}\n\nشاهد هذا الريل القصير (20 ثانية) لتكتشف الخلاصة العملية فوراً! 🔥\n\n📌 احفظ الفيديو للرجوع إليه لاحقاً، واكتب رأيك في التعليقات 👇`,
-      hashtags: Array.from(
-        new Set([...dynamicTags, "#ريلز_فيسبوك", "#ريلز", "#فيسبوك", "#نصائح_سريعة", "#محتوى_هادف"])
-      ).slice(0, 6),
-      subtitleStyle: "hormozi",
-      musicMood: "energetic",
-      scenes: [
-        {
-          id: `scene-1-${now}`,
-          order: 1,
-          phase: "hook",
-          phaseLabel: "المقدمة الخاطفة (0-3 ث)",
-          startTime: 0,
-          endTime: 3,
-          duration: 3,
-          narration: `توقف فوراً! هل تعرف الحقيقة الكاملة حول ${shortTopic}؟`,
-          overlayTitle: cfg.hook,
-          overlaySubtitle: "شاهد الـ 20 ثانية كاملة...",
-          badge: cfg.badge1,
-          soundEffect: "whoosh",
-          visualTheme: cfg.theme1,
-        },
-        {
-          id: `scene-2-${now}`,
-          order: 2,
-          phase: "problem",
-          phaseLabel: "المشكلة / التشويق (3-8 ث)",
-          startTime: 3,
-          endTime: 8,
-          duration: 5,
-          narration: `أغلب الناس يخطئون عند التعامل مع ${part1} ويضيعون وقتاً طويلاً دون نتيجة.`,
-          overlayTitle: `لماذا يفشل الأغلب؟`,
-          overlaySubtitle: sub1,
-          badge: "❌ الخطأ الشائع",
-          soundEffect: "impact",
-          visualTheme: "dark-luxe",
-        },
-        {
-          id: `scene-3-${now}`,
-          order: 3,
-          phase: "solution",
-          phaseLabel: "الحل والقيمة (8-15 ث)",
-          startTime: 8,
-          endTime: 15,
-          duration: 7,
-          narration: `إليك الخلاصة الذهبية: ${part2}. طبق هذه الخطوة البسيطة يومياً وسترى فرقاً مذهلاً في نتائجك.`,
-          overlayTitle: headlineTopic || "الحل الذكي",
-          overlaySubtitle: sub2,
-          badge: "💡 الخلاصة العملية",
-          soundEffect: "ding",
-          visualTheme: "emerald",
-        },
-        {
-          id: `scene-4-${now}`,
-          order: 4,
-          phase: "cta",
-          phaseLabel: "الدعوة للتفاعل (15-20 ث)",
-          startTime: 15,
-          endTime: 20,
-          duration: 5,
-          narration: `احفظ هذا الريل الآن لتطبيق ${headlineTopic} اليوم، وشاركه مع صديق يحتاج هذه الفكرة!`,
-          overlayTitle: "احفظ الريل الآن !",
-          overlaySubtitle: "شارك رأيك في التعليقات 👇",
-          badge: "🔥 شارك واحفظ",
-          soundEffect: "pop",
-          visualTheme: "electric",
-        },
-      ],
-    };
-  }
-
-  if (isEnglish) {
-    return {
-      id: `reel-${now}`,
-      title: shortTopic || "20s Facebook Reel",
-      idea: cleanIdea,
-      tone,
-      language: "anglais",
-      hookRating: "A+ Viral",
-      viralityScore: 95,
-      retentionTip:
-        "Bold high-contrast captions in the first 3 seconds boost Facebook Reel watch-through above 85%.",
-      recommendedBgmTrack: "Electro Hype Beat (120 BPM)",
-      fbPostCaption: `⚡ ${cleanIdea}\n\nWatch these 20 seconds to get the exact takeaway! 💡\n\n👇 Save this Reel and comment 'YES' if you want more tips!`,
-      hashtags: Array.from(
-        new Set([...dynamicTags, "#FacebookReels", "#Reels20s", "#ViralTips", "#QuickGuide"])
-      ).slice(0, 6),
-      subtitleStyle: "hormozi",
-      musicMood: "energetic",
-      scenes: [
-        {
-          id: `scene-1-${now}`,
-          order: 1,
-          phase: "hook",
-          phaseLabel: "The Hook (0-3s)",
-          startTime: 0,
-          endTime: 3,
-          duration: 3,
-          narration: `Stop scrolling! Here is what nobody tells you about ${shortTopic}.`,
-          overlayTitle: headlineTopic.toUpperCase() || "STOP SCROLLING!",
-          overlaySubtitle: "Watch these 20 seconds...",
-          badge: "🚨 WAIT A SECOND",
-          soundEffect: "whoosh",
-          visualTheme: "crimson",
-        },
-        {
-          id: `scene-2-${now}`,
-          order: 2,
-          phase: "problem",
-          phaseLabel: "The Problem (3-8s)",
-          startTime: 3,
-          endTime: 8,
-          duration: 5,
-          narration: `Most people struggle with ${part1} because they overlook one crucial detail.`,
-          overlayTitle: "THE BIG MISTAKE",
-          overlaySubtitle: sub1,
-          badge: "❌ 90% DO THIS",
-          soundEffect: "impact",
-          visualTheme: "dark-luxe",
-        },
-        {
-          id: `scene-3-${now}`,
-          order: 3,
-          phase: "solution",
-          phaseLabel: "The Solution (8-15s)",
-          startTime: 8,
-          endTime: 15,
-          duration: 7,
-          narration: `Here is the key: ${part2}. Apply it step by step starting today for instant clarity and results.`,
-          overlayTitle: "THE REAL METHOD",
-          overlaySubtitle: sub2,
-          badge: "💡 KEY TAKEAWAY",
-          soundEffect: "ding",
-          visualTheme: "emerald",
-        },
-        {
-          id: `scene-4-${now}`,
-          order: 4,
-          phase: "cta",
-          phaseLabel: "Call to Action (15-20s)",
-          startTime: 15,
-          endTime: 20,
-          duration: 5,
-          narration: `Save this Reel to remember ${headlineTopic}, and share it with someone who needs it!`,
-          overlayTitle: "SAVE THIS REEL!",
-          overlaySubtitle: "Comment 'YES' below 👇",
-          badge: "🔥 TAKE ACTION",
-          soundEffect: "pop",
-          visualTheme: "electric",
-        },
-      ],
-    };
-  }
-
-  // French (default)
-  const toneFr: Record<string, { badge: string; theme: string; hookPrefix: string; rating: string }> = {
-    viral: { badge: "🚨 ATTENTION", theme: "crimson", hookPrefix: "ARRÊTE TOUT !", rating: "A+ Viral" },
-    "éducatif": { badge: "💡 ASTUCE CLÉ", theme: "electric", hookPrefix: "LE SAVIEZ-VOUS ?", rating: "A+ Éducatif" },
-    business: { badge: "💼 STRATÉGIE", theme: "emerald", hookPrefix: "MÉTHODE PRO :", rating: "A+ Business" },
-    humour: { badge: "😂 VÉRITÉ", theme: "sunset", hookPrefix: "ON EN PARLE ?", rating: "A+ Humour" },
-    "mystérieux": { badge: "🔮 RÉVÉLATION", theme: "dark-luxe", hookPrefix: "LE SECRET DE", rating: "A+ Mystère" },
-  };
-  const cfgFr = toneFr[tone] || toneFr.viral;
-
-  return {
-    id: `reel-${now}`,
-    title: shortTopic || "Réel Facebook 20s",
-    idea: cleanIdea,
-    tone,
-    language: language || "français",
-    hookRating: cfgFr.rating,
-    viralityScore: 95,
-    retentionTip:
-      "Sur Facebook, un titre contrasté dès la première seconde lié directement à votre sujet retient 3x plus de spectateurs.",
-    recommendedBgmTrack: "Électro Hype & Bass (120 BPM)",
-    fbPostCaption: `⚡ ${cleanIdea}\n\nDécouvrez l'essentiel en seulement 20 secondes ! 💡\n\n📌 Enregistrez ce Réel pour le revoir plus tard et partagez-le avec un ami 👇`,
-    hashtags: Array.from(
-      new Set([...dynamicTags, "#ReelsFacebook", "#Astuce20s", "#FacebookReels", "#ConseilDuJour", "#Viral"])
-    ).slice(0, 6),
-    subtitleStyle: "hormozi",
-    musicMood: "energetic",
-    scenes: [
-      {
-        id: `scene-1-${now}`,
-        order: 1,
-        phase: "hook",
-        phaseLabel: "L'Accroche (0-3s)",
-        startTime: 0,
-        endTime: 3,
-        duration: 3,
-        narration: `Arrête tout ! Voici ce que presque personne ne sait sur ${shortTopic}.`,
-        overlayTitle: headlineTopic.toUpperCase() || cfgFr.hookPrefix,
-        overlaySubtitle: "Regarde ces 20 secondes...",
-        badge: cfgFr.badge,
-        soundEffect: "whoosh",
-        visualTheme: cfgFr.theme,
-      },
-      {
-        id: `scene-2-${now}`,
-        order: 2,
-        phase: "problem",
-        phaseLabel: "Le Problème (3-8s)",
-        startTime: 3,
-        endTime: 8,
-        duration: 5,
-        narration: `La plupart des gens bloquent sur ${part1} parce qu'ils utilisent la mauvaise approche dès le départ.`,
-        overlayTitle: "L'ERREUR À ÉVITER",
-        overlaySubtitle: sub1,
-        badge: "❌ LE PIÈGE",
-        soundEffect: "impact",
-        visualTheme: "dark-luxe",
-      },
-      {
-        id: `scene-3-${now}`,
-        order: 3,
-        phase: "solution",
-        phaseLabel: "La Solution (8-15s)",
-        startTime: 8,
-        endTime: 15,
-        duration: 7,
-        narration: `Voici la clé concrète : ${part2}. Mets cette idée en pratique dès aujourd'hui pour voir la différence rapidement.`,
-        overlayTitle: "LA BONNE MÉTHODE",
-        overlaySubtitle: sub2,
-        badge: "💡 LA SOLUTION",
-        soundEffect: "ding",
-        visualTheme: "emerald",
-      },
-      {
-        id: `scene-4-${now}`,
-        order: 4,
-        phase: "cta",
-        phaseLabel: "L'Appel à l'Action (15-20s)",
-        startTime: 15,
-        endTime: 20,
-        duration: 5,
-        narration: `Enregistre ce réel pour appliquer ${headlineTopic} dès ce soir, et commente GO pour la suite !`,
-        overlayTitle: "ENREGISTRE CE RÉEL !",
-        overlaySubtitle: "Commente 'GO' en bas 👇",
-        badge: "🔥 PASSE À L'ACTION",
-        soundEffect: "pop",
-        visualTheme: "electric",
-      },
-    ],
-  };
-}
 
 // Vite integration
 async function startServer() {
@@ -1002,8 +779,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

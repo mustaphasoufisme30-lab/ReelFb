@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
   Sun,
   Moon,
+  AlertCircle,
 } from 'lucide-react';
 import { ReelProject } from './types/reel';
 import { IdeaGenerator } from './components/IdeaGenerator';
@@ -212,7 +213,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('idea');
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [notification, setNotification] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'success' | 'error';
+  } | null>(null);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -230,9 +235,9 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const showToast = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), type === 'error' ? 5500 : 3500);
   };
 
   const handleGenerateReel = async (data: {
@@ -243,19 +248,66 @@ export default function App() {
     voiceName: string;
   }) => {
     setIsGenerating(true);
-    try {
+    setGenerationError(null);
+
+    const requestReel = async () => {
       const response = await fetch('/api/generate-reel', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        credentials: 'same-origin',
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Erreur de génération');
+      const contentType = response.headers.get('content-type') || '';
+      const rawText = await response.text();
+      let parsed: any = null;
+      if (contentType.includes('application/json') || rawText.trim().startsWith('{')) {
+        try {
+          parsed = JSON.parse(rawText);
+        } catch {
+          parsed = null;
+        }
       }
 
-      const generatedProject: ReelProject = await response.json();
+      if (!response.ok) {
+        const retryable = [502, 503, 504].includes(response.status);
+        const msg =
+          parsed?.error ||
+          (data.language === 'arabe'
+            ? `خطأ في الخادم (${response.status}). يرجى المحاولة مرة أخرى.`
+            : `Erreur serveur (${response.status}). Veuillez réessayer.`);
+        const err: any = new Error(msg);
+        err.retryable = retryable;
+        throw err;
+      }
+
+      if (!parsed || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
+        const err: any = new Error(
+          data.language === 'arabe'
+            ? 'استجابة غير متوقعة من الخادم. يرجى إعادة المحاولة.'
+            : 'Réponse invalide du serveur. Veuillez réessayer.'
+        );
+        err.retryable = true;
+        throw err;
+      }
+
+      return parsed as ReelProject;
+    };
+
+    try {
+      let generatedProject: ReelProject;
+      try {
+        generatedProject = await requestReel();
+      } catch (firstErr: any) {
+        const isNetwork = firstErr instanceof TypeError || firstErr?.retryable;
+        if (!isNetwork) throw firstErr;
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        generatedProject = await requestReel();
+      }
+
       setProject((prev) => ({
         ...generatedProject,
         voiceName: data.voiceName,
@@ -269,11 +321,18 @@ export default function App() {
       showToast(
         data.language === 'arabe'
           ? 'تم إنشاء الريل الخاص بك بنجاح ! 🚀'
-          : 'Votre Réel de 20s a été généré avec succès ! 🚀'
+          : 'Votre Réel de 20s a été généré avec succès ! 🚀',
+        'success'
       );
     } catch (err: any) {
       console.error('Generation failed:', err);
-      showToast(err?.message || 'Erreur lors de la génération. Veuillez réessayer.');
+      const errMsg =
+        err?.message ||
+        (data.language === 'arabe'
+          ? 'حدث خطأ أثناء إنشاء الريل. يرجى المحاولة مجدداً.'
+          : 'Erreur lors de la génération. Veuillez réessayer.');
+      setGenerationError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -285,9 +344,19 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-500 selection:text-white transition-colors duration-200">
       {/* Toast Notification */}
       {notification && (
-        <div className="fixed top-4 right-4 z-50 bg-blue-600 text-white px-4 py-2.5 rounded-xl shadow-2xl font-bold text-xs flex items-center gap-2 animate-bounce">
-          <Check size={16} />
-          <span>{notification}</span>
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl shadow-2xl font-bold text-xs flex items-center gap-2 max-w-sm ${
+            notification.type === 'error'
+              ? 'bg-rose-600 text-white'
+              : 'bg-blue-600 text-white animate-bounce'
+          }`}
+        >
+          {notification.type === 'error' ? (
+            <AlertCircle size={16} className="shrink-0" />
+          ) : (
+            <Check size={16} className="shrink-0" />
+          )}
+          <span>{notification.message}</span>
         </div>
       )}
 
@@ -466,6 +535,7 @@ export default function App() {
                   <IdeaGenerator
                     onGenerate={handleGenerateReel}
                     isLoading={isGenerating}
+                    errorMessage={generationError}
                   />
                 </div>
               )}
