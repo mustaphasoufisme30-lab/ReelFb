@@ -528,8 +528,11 @@ export default function App() {
             <span>•</span>
             <span>مولد ريلز فيسبوك الذكي • Créateur de Réels Facebook IA</span>
           </div>
+          <div className="font-semibold text-slate-300">
+            Copyright@MahfoudDigital2026
+          </div>
           <div className="flex items-center gap-4 text-slate-400">
-            <span>Export WebM 9:16</span>
+            <span>Export MP4 / WebM 9:16</span>
             <span>•</span>
             <span>Sous-titres .SRT</span>
             <span>•</span>

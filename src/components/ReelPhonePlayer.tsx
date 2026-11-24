@@ -60,7 +60,23 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
 
   const animationFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
+  const currentTimeRef = useRef<number>(0);
+  const currentSceneIndexRef = useRef<number>(currentSceneIndex);
+  const onSceneChangeRef = useRef(onSceneChange);
+  const isMutedRef = useRef<boolean>(isMuted);
   const lastPlayedSceneIdRef = useRef<string>('');
+
+  useEffect(() => {
+    currentSceneIndexRef.current = currentSceneIndex;
+  }, [currentSceneIndex]);
+
+  useEffect(() => {
+    onSceneChangeRef.current = onSceneChange;
+  }, [onSceneChange]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
   // Initialize renderer
   useEffect(() => {
@@ -88,6 +104,23 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
     });
   }, [currentTime, project, showFbOverlay]);
 
+  const playSceneNarration = (scene: ReelScene) => {
+    if (isMutedRef.current) return;
+
+    if (scene.audioUrl) {
+      // Decode base64 or fetch
+      fetch(scene.audioUrl)
+        .then((res) => res.arrayBuffer())
+        .then((buf) => audioEngine.playVoiceoverBuffer(buf))
+        .catch(() => {
+          audioEngine.speakFallback(scene.narration);
+        });
+    } else {
+      // Fallback to browser SpeechSynthesis
+      audioEngine.speakFallback(scene.narration);
+    }
+  };
+
   // Main playback animation loop
   useEffect(() => {
     if (!isPlaying) {
@@ -105,37 +138,37 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
 
     const loop = (timestamp: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = timestamp;
-      const deltaSec = (timestamp - lastTimeRef.current) / 1000;
+      const deltaSec = Math.min(0.1, (timestamp - lastTimeRef.current) / 1000);
       lastTimeRef.current = timestamp;
 
-      setCurrentTime((prev) => {
-        const next = prev + deltaSec;
-        if (next >= 20.0) {
-          // Loop back to start (seamless Facebook Reel loop)
-          lastPlayedSceneIdRef.current = '';
-          return 0;
-        }
+      let next = currentTimeRef.current + deltaSec;
+      if (next >= 20.0) {
+        // Loop back to start (seamless Facebook Reel loop)
+        lastPlayedSceneIdRef.current = '';
+        next = 0;
+      }
 
-        // Check if scene changed
-        const activeSceneIdx = project.scenes.findIndex(
-          (s) => next >= s.startTime && next <= s.endTime
-        );
-        if (activeSceneIdx !== -1 && activeSceneIdx !== currentSceneIndex) {
-          onSceneChange(activeSceneIdx);
-        }
+      currentTimeRef.current = next;
+      setCurrentTime(next);
 
-        const activeScene = project.scenes[activeSceneIdx !== -1 ? activeSceneIdx : 0];
-        if (activeScene && activeScene.id !== lastPlayedSceneIdRef.current) {
-          lastPlayedSceneIdRef.current = activeScene.id;
-          if (activeScene.soundEffect && activeScene.soundEffect !== 'none') {
-            audioEngine.playSoundEffect(activeScene.soundEffect);
-          }
-          // Voiceover for scene
-          playSceneNarration(activeScene);
-        }
+      // Check if scene changed (outside of any React state updater)
+      const activeSceneIdx = project.scenes.findIndex(
+        (s) => next >= s.startTime && next <= s.endTime
+      );
+      if (activeSceneIdx !== -1 && activeSceneIdx !== currentSceneIndexRef.current) {
+        currentSceneIndexRef.current = activeSceneIdx;
+        onSceneChangeRef.current(activeSceneIdx);
+      }
 
-        return next;
-      });
+      const activeScene = project.scenes[activeSceneIdx !== -1 ? activeSceneIdx : 0];
+      if (activeScene && activeScene.id !== lastPlayedSceneIdRef.current) {
+        lastPlayedSceneIdRef.current = activeScene.id;
+        if (activeScene.soundEffect && activeScene.soundEffect !== 'none') {
+          audioEngine.playSoundEffect(activeScene.soundEffect);
+        }
+        // Voiceover for scene
+        playSceneNarration(activeScene);
+      }
 
       animationFrameRef.current = requestAnimationFrame(loop);
     };
@@ -149,24 +182,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
       audioEngine.stopBgmLoop();
       audioEngine.stopVoiceover();
     };
-  }, [isPlaying, project, currentSceneIndex, onSceneChange]);
-
-  const playSceneNarration = (scene: ReelScene) => {
-    if (isMuted) return;
-
-    if (scene.audioUrl) {
-      // Decode base64 or fetch
-      fetch(scene.audioUrl)
-        .then((res) => res.arrayBuffer())
-        .then((buf) => audioEngine.playVoiceoverBuffer(buf))
-        .catch(() => {
-          audioEngine.speakFallback(scene.narration);
-        });
-    } else {
-      // Fallback to browser SpeechSynthesis
-      audioEngine.speakFallback(scene.narration);
-    }
-  };
+  }, [isPlaying, project]);
 
   const handleTogglePlay = () => {
     setIsPlaying(!isPlaying);
@@ -174,8 +190,10 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
 
   const handleReset = () => {
     setIsPlaying(false);
+    currentTimeRef.current = 0;
     setCurrentTime(0);
     lastPlayedSceneIdRef.current = '';
+    currentSceneIndexRef.current = 0;
     onSceneChange(0);
     audioEngine.stopAll();
   };
@@ -188,11 +206,13 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
 
   const handleScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTime = parseFloat(e.target.value);
+    currentTimeRef.current = newTime;
     setCurrentTime(newTime);
     const sceneIdx = project.scenes.findIndex(
       (s) => newTime >= s.startTime && newTime <= s.endTime
     );
     if (sceneIdx !== -1 && sceneIdx !== currentSceneIndex) {
+      currentSceneIndexRef.current = sceneIdx;
       onSceneChange(sceneIdx);
     }
   };

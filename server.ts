@@ -287,18 +287,34 @@ app.post("/api/convert-to-mp4", async (req, res) => {
   }
 });
 
-// Initialize Google GenAI
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
+// Helper: Dynamically initialize GoogleGenAI with validated API key
+function getAiClient(): GoogleGenAI | null {
+  const rawKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
+  if (!rawKey || rawKey === "MY_GEMINI_API_KEY" || rawKey.length < 10) {
+    return null;
+  }
+  return new GoogleGenAI({
+    apiKey: rawKey,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build",
       },
-    })
-  : null;
+    },
+  });
+}
+
+function isAuthError(err: any): boolean {
+  const status = err?.status || err?.code;
+  const msg = String(err?.message || "");
+  return (
+    status === 401 ||
+    status === 403 ||
+    msg.includes("API key not valid") ||
+    msg.includes("UNAUTHENTICATED") ||
+    msg.includes("API_KEY_INVALID") ||
+    msg.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED")
+  );
+}
 
 // Endpoint: Generate complete 20-second Facebook Reel breakdown
 app.post("/api/generate-reel", async (req, res) => {
@@ -315,6 +331,7 @@ app.post("/api/generate-reel", async (req, res) => {
       return res.status(400).json({ error: "L'idée de texte est requise." });
     }
 
+    const ai = getAiClient();
     if (!ai) {
       const mockReel = createFallbackReel(idea, tone, language);
       return res.json(mockReel);
@@ -516,7 +533,11 @@ Style visuel : ${visualStyle}`;
 
     res.json(result);
   } catch (error: any) {
-    console.error("Error generating reel:", error);
+    if (isAuthError(error)) {
+      console.warn("Gemini API key unavailable or invalid; using smart local reel generator.");
+    } else {
+      console.warn("Gemini generation fallback triggered:", error?.message || error);
+    }
     const fallback = createFallbackReel(
       req.body?.idea || "Idée de test",
       req.body?.tone || "viral",
@@ -535,9 +556,10 @@ app.post("/api/generate-voiceover", async (req, res) => {
       return res.status(400).json({ error: "Texte requis pour la voix off." });
     }
 
+    const ai = getAiClient();
     if (!ai) {
       return res.status(503).json({
-        error: "Clé API non configurée. Le navigateur utilisera la synthèse vocale intégrée.",
+        error: "Synthèse vocale du navigateur activée.",
         fallbackToBrowser: true,
       });
     }
@@ -582,9 +604,13 @@ app.post("/api/generate-voiceover", async (req, res) => {
       mimeType: "audio/wav",
     });
   } catch (err: any) {
-    console.error("TTS generation error:", err);
-    res.status(500).json({
-      error: err.message || "Erreur de synthèse vocale.",
+    if (isAuthError(err)) {
+      console.warn("Gemini TTS key unavailable or invalid; falling back to browser speech.");
+    } else {
+      console.warn("TTS generation fallback:", err?.message || err);
+    }
+    res.status(503).json({
+      error: "Synthèse vocale du navigateur activée.",
       fallbackToBrowser: true,
     });
   }
@@ -595,6 +621,7 @@ app.post("/api/refine-scene", async (req, res) => {
   try {
     const { currentScene, instruction } = req.body;
 
+    const ai = getAiClient();
     if (!ai) {
       return res.json({
         ...currentScene,
@@ -634,7 +661,17 @@ Scène actuelle :
       ...refined,
     });
   } catch (error: any) {
-    console.error("Error refining scene:", error);
+    if (isAuthError(error)) {
+      console.warn("Gemini refine key unavailable or invalid; returning boosted local scene.");
+      const { currentScene } = req.body || {};
+      return res.json({
+        ...currentScene,
+        overlayTitle: currentScene?.overlayTitle?.startsWith("🔥")
+          ? currentScene.overlayTitle
+          : `🔥 ${currentScene?.overlayTitle || ""}`,
+      });
+    }
+    console.warn("Error refining scene:", error?.message || error);
     res.status(500).json({ error: error.message || "Erreur d'optimisation" });
   }
 });
