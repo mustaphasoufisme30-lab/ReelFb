@@ -1,0 +1,6 @@
+{
+  "name": "ReelMaker 20s - Créateur de Réels Facebook IA",
+  "description": "Générez un Réel Facebook viral de 20 secondes à partir d'une simple idée : script timé, voix off IA, sous-titres animés et prévisualisation 9:16.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
