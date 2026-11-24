@@ -99,9 +99,9 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* 1. Language Selector Toolbar */}
-      <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-2xl">
-        <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 mb-2">
-          <Globe2 size={15} className="text-emerald-400" />
+      <div className="p-3 bg-slate-50 border-slate-200 dark:bg-slate-900/90 dark:border-slate-800 border rounded-2xl">
+        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2 mb-2">
+          <Globe2 size={15} className="text-emerald-600 dark:text-emerald-400" />
           <span>Langue du Réel Facebook / لغة الريل :</span>
         </label>
         <div className="grid grid-cols-3 gap-2">
@@ -112,10 +112,10 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
                 key={lang.id}
                 type="button"
                 onClick={() => handleLanguageChange(lang.id as any)}
-                className={`py-2 px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-2 font-bold text-xs ${
+                className={`py-2 px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-2 font-bold text-xs cursor-pointer ${
                   isSelected
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-900/40 ring-1 ring-blue-400'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 dark:shadow-blue-900/40 ring-1 ring-blue-400'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-950/60 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
                 }`}
               >
                 <span>{lang.flag}</span>
@@ -129,8 +129,8 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
       {/* Quick Inspiration Presets */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Lightbulb size={14} className="text-amber-400" />
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Lightbulb size={14} className="text-amber-500 dark:text-amber-400" />
             <span>
               {isArabic
                 ? 'أفكار سريعة جاهزة للاختبار بنقرة واحدة :'
@@ -145,9 +145,9 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
               key={idx}
               type="button"
               onClick={() => handleSelectPreset(preset)}
-              className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition flex items-center gap-1.5 text-left"
+              className="text-xs px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-300 dark:border-slate-800 dark:hover:border-slate-700 transition flex items-center gap-1.5 text-left cursor-pointer"
             >
-              <span className="text-[10px] text-blue-400 font-bold uppercase">
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase">
                 [{preset.category}]
               </span>
               <span className="truncate max-w-[150px] sm:max-w-[220px]">
@@ -163,9 +163,9 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
         <div className="flex justify-between items-center mb-1.5">
           <label
             htmlFor="idea-input"
-            className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5"
+            className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5"
           >
-            <MessageSquare size={14} className="text-blue-400" />
+            <MessageSquare size={14} className="text-blue-600 dark:text-blue-400" />
             <span>
               {isArabic
                 ? 'فكرة الريل (اكتب فكرتك هنا) :'
@@ -189,14 +189,14 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
                 ? 'مثال: 3 أخطاء شائعة تدمر طاقتك في الصباح، وطريقة سهلة للتخلص منها في 20 ثانية...'
                 : 'Ex: 3 habitudes simples le soir qui permettent de se réveiller en pleine forme sans réveil...'
             }
-            className="w-full text-sm bg-slate-900 border border-slate-800 focus:border-blue-500 rounded-2xl p-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all resize-none shadow-inner"
+            className="w-full text-sm bg-white border border-slate-300 text-slate-900 placeholder-slate-400 dark:bg-slate-900 dark:border-slate-800 dark:text-white dark:placeholder-slate-500 focus:border-blue-500 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all resize-none shadow-inner"
           />
         </div>
       </div>
 
       {/* Tone Selection */}
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-2">
           {isArabic ? 'نبرة وأسلوب الريل على فيسبوك :' : 'Ton du Réel Facebook :'}
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" dir={isArabic ? 'rtl' : 'ltr'}>
@@ -207,10 +207,10 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
                 key={t.id}
                 type="button"
                 onClick={() => setTone(t.id)}
-                className={`p-2.5 rounded-xl border text-left transition-all ${
+                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-blue-600/15 border-blue-500 text-white shadow-sm ring-1 ring-blue-500/40'
-                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                    ? 'bg-blue-50 border-blue-500 text-blue-900 dark:bg-blue-600/15 dark:border-blue-500 dark:text-white shadow-sm ring-1 ring-blue-500/40'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900/60 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-200'
                 }`}
               >
                 <div className="text-xs font-bold truncate">{t.label}</div>
@@ -225,13 +225,13 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Audience */}
         <div>
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
             {isArabic ? 'الجمهور المستهدف :' : 'Public Cible :'}
           </label>
           <select
             value={targetAudience}
             onChange={(e) => setTargetAudience(e.target.value)}
-            className="w-full text-xs font-medium bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:border-blue-500 focus:outline-none"
+            className="w-full text-xs font-medium bg-white border border-slate-300 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 rounded-xl px-3 py-2.5 focus:border-blue-500 focus:outline-none"
           >
             {isArabic ? (
               <>
@@ -255,14 +255,14 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
 
         {/* Voice Persona */}
         <div>
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
-            <Mic size={13} className="text-purple-400" />
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+            <Mic size={13} className="text-purple-600 dark:text-purple-400" />
             <span>Voix IA Gemini :</span>
           </label>
           <select
             value={voiceName}
             onChange={(e) => setVoiceName(e.target.value)}
-            className="w-full text-xs font-medium bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 focus:border-blue-500 focus:outline-none"
+            className="w-full text-xs font-medium bg-white border border-slate-300 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 rounded-xl px-3 py-2.5 focus:border-blue-500 focus:outline-none"
           >
             {VOICES.map((v) => (
               <option key={v.id} value={v.id}>
@@ -277,7 +277,7 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
       <button
         type="submit"
         disabled={isLoading || !ideaText.trim()}
-        className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-sm tracking-wide shadow-xl shadow-blue-900/30 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
+        className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-sm tracking-wide shadow-xl shadow-blue-600/20 dark:shadow-blue-900/30 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
       >
         {isLoading ? (
           <>
@@ -303,7 +303,7 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
 
       {/* Retention Guarantee Note */}
       <div className="flex items-center justify-center gap-2 text-[11px] text-slate-500 text-center">
-        <Zap size={13} className="text-emerald-400" />
+        <Zap size={13} className="text-emerald-500 dark:text-emerald-400" />
         <span>
           {isArabic
             ? 'تنسيق 20 ثانية مبرمج لمعايير خوارزمية ريلز فيسبوك 2026'

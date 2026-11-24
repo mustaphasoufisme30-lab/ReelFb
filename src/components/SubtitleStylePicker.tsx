@@ -73,8 +73,8 @@ export const SubtitleStylePicker: React.FC<SubtitleStylePickerProps> = ({
     <div className="space-y-5">
       {/* Subtitles Style */}
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-          <Type size={14} className="text-blue-400" />
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+          <Type size={14} className="text-blue-600 dark:text-blue-400" />
           <span>Style des Sous-titres & Titres Écran :</span>
         </label>
 
@@ -86,17 +86,19 @@ export const SubtitleStylePicker: React.FC<SubtitleStylePickerProps> = ({
                 key={st.id}
                 type="button"
                 onClick={() => handleSelectStyle(st.id)}
-                className={`p-3 rounded-2xl border text-left transition-all ${
+                className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-blue-600/15 border-blue-500 shadow-md ring-1 ring-blue-500/40'
-                    : 'bg-slate-900/60 border-slate-800 hover:bg-slate-900/90'
+                    ? 'bg-blue-50 border-blue-500 dark:bg-blue-600/15 dark:border-blue-500 shadow-md ring-1 ring-blue-500/40'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100 dark:bg-slate-900/60 dark:border-slate-800 dark:hover:bg-slate-900/90'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-white">{st.name}</span>
-                  <span className={st.previewClass}>TEXTE</span>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">{st.name}</span>
+                  <span className="inline-flex items-center justify-center rounded-md bg-slate-900 px-1.5 py-0.5">
+                    <span className={st.previewClass}>TEXTE</span>
+                  </span>
                 </div>
-                <p className="text-[11px] text-slate-400">{st.desc}</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">{st.desc}</p>
               </button>
             );
           })}
@@ -105,8 +107,8 @@ export const SubtitleStylePicker: React.FC<SubtitleStylePickerProps> = ({
 
       {/* Background Music Mood */}
       <div>
-        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-          <Music2 size={14} className="text-purple-400" />
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+          <Music2 size={14} className="text-purple-600 dark:text-purple-400" />
           <span>Musique de Fond (Synthétisée) :</span>
         </label>
 
@@ -118,10 +120,10 @@ export const SubtitleStylePicker: React.FC<SubtitleStylePickerProps> = ({
                 key={m.id}
                 type="button"
                 onClick={() => handleSelectMood(m.id)}
-                className={`p-3 rounded-xl border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-purple-600/15 border-purple-500 shadow-sm ring-1 ring-purple-500/40 text-white'
-                    : 'bg-slate-900/50 border-slate-800 text-slate-300 hover:bg-slate-900'
+                    ? 'bg-purple-50 border-purple-500 text-purple-950 dark:bg-purple-600/15 dark:border-purple-500 dark:text-white shadow-sm ring-1 ring-purple-500/40'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 dark:bg-slate-900/50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-900'
                 }`}
               >
                 <div className="text-xs font-bold">{m.name}</div>

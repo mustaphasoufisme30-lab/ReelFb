@@ -68,7 +68,27 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
 
   useEffect(() => {
     currentSceneIndexRef.current = currentSceneIndex;
-  }, [currentSceneIndex]);
+    // When paused, jump preview to the selected scene so clicking a scene card immediately previews it
+    if (!isPlaying && project.scenes[currentSceneIndex]) {
+      const targetStart = project.scenes[currentSceneIndex].startTime + 0.05;
+      const curScene = project.scenes.find(
+        (s) => currentTimeRef.current >= s.startTime && currentTimeRef.current <= s.endTime
+      );
+      if (curScene?.id !== project.scenes[currentSceneIndex].id) {
+        currentTimeRef.current = targetStart;
+        setCurrentTime(targetStart);
+      }
+    }
+  }, [currentSceneIndex, isPlaying, project.scenes]);
+
+  // Reset player to 0s whenever a newly generated reel project loads
+  useEffect(() => {
+    setIsPlaying(false);
+    currentTimeRef.current = 0;
+    setCurrentTime(0);
+    lastPlayedSceneIdRef.current = '';
+    audioEngine.stopAll();
+  }, [project.id]);
 
   useEffect(() => {
     onSceneChangeRef.current = onSceneChange;
@@ -293,14 +313,14 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
       <div className="w-full max-w-sm flex items-center justify-between mb-3 px-2">
         <div className="flex items-center gap-2">
           <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
             Aperçu Réel Facebook (20s)
           </span>
         </div>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setShowFbOverlay(!showFbOverlay)}
-            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/60"
+            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700/60 transition-colors border cursor-pointer"
             title="Afficher/Masquer l'interface Facebook"
           >
             {showFbOverlay ? <Eye size={13} /> : <EyeOff size={13} />}
@@ -436,14 +456,14 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
       </div>
 
       {/* Timeline Controls & Scrubber */}
-      <div className="w-full max-w-sm mt-4 p-3.5 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl space-y-3">
+      <div className="w-full max-w-sm mt-4 p-3.5 bg-white border-slate-200 shadow-md dark:bg-slate-900/90 dark:border-slate-800 dark:shadow-xl border rounded-2xl space-y-3 transition-colors duration-200">
         {/* Progress Bar with Scene Segments */}
         <div className="space-y-1">
-          <div className="flex justify-between text-xs font-semibold text-slate-400">
-            <span className="text-blue-400 font-mono">
+          <div className="flex justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span className="text-blue-600 dark:text-blue-400 font-mono">
               {currentTime.toFixed(1)}s / 20.0s
             </span>
-            <span className="text-slate-300">
+            <span className="text-slate-700 dark:text-slate-300">
               {activeScene?.phaseLabel || 'Scène'}
             </span>
           </div>
@@ -456,7 +476,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
               step="0.1"
               value={currentTime}
               onChange={handleScrub}
-              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
+              className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
             />
 
             {/* Segment markers (0s, 3s, 8s, 15s, 20s) */}
@@ -475,7 +495,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handleTogglePlay}
-              className={`p-2.5 rounded-xl font-medium flex items-center justify-center transition-colors ${
+              className={`p-2.5 rounded-xl font-medium flex items-center justify-center transition-colors cursor-pointer ${
                 isPlaying
                   ? 'bg-amber-500 text-slate-950 hover:bg-amber-400'
                   : 'bg-blue-600 text-white hover:bg-blue-500'
@@ -487,7 +507,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
 
             <button
               onClick={handleReset}
-              className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
+              className="p-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors cursor-pointer"
               title="Recommencer"
             >
               <RotateCcw size={18} />
@@ -495,7 +515,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
 
             <button
               onClick={handleToggleMute}
-              className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
+              className="p-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors cursor-pointer"
               title={isMuted ? 'Activer le son' : 'Couper le son'}
             >
               {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
@@ -506,10 +526,10 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
           <button
             onClick={handleGenerateAllVoiceovers}
             disabled={isVoiceoverLoading}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 border transition-colors cursor-pointer"
             title="Générer la voix off IA pour chaque scène"
           >
-            <Sparkles size={14} className="text-amber-400" />
+            <Sparkles size={14} className="text-amber-500 dark:text-amber-400" />
             <span>{isVoiceoverLoading ? 'Synthèse...' : 'Voix off IA'}</span>
           </button>
         </div>
@@ -523,13 +543,13 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
           className="hidden"
         />
 
-        <div className="flex items-center justify-between gap-2 p-2 bg-slate-950/70 border border-slate-800 rounded-xl">
+        <div className="flex items-center justify-between gap-2 p-2 bg-slate-50 border-slate-200 dark:bg-slate-950/70 dark:border-slate-800 border rounded-xl">
           <button
             type="button"
             onClick={() => phoneFileInputRef.current?.click()}
-            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-1.5 px-2 rounded-lg bg-blue-950/50 hover:bg-blue-900/50 text-blue-300 border border-blue-500/30 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold py-1.5 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:hover:bg-blue-900/50 dark:text-blue-300 dark:border-blue-500/30 border transition-colors cursor-pointer"
           >
-            <ImageIcon size={14} className="text-blue-400" />
+            <ImageIcon size={14} className="text-blue-600 dark:text-blue-400" />
             <span>
               {project.globalBackgroundImage
                 ? 'Changer photo de fond'
@@ -543,7 +563,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
               onClick={() =>
                 onUpdateProject({ ...project, globalBackgroundImage: undefined })
               }
-              className="text-[11px] text-slate-400 hover:text-red-400 px-2 py-1 rounded bg-slate-900"
+              className="text-[11px] text-slate-600 hover:text-red-600 bg-slate-200 dark:text-slate-400 dark:hover:text-red-400 dark:bg-slate-900 px-2 py-1 rounded cursor-pointer"
               title="Supprimer la photo"
             >
               Retirer
@@ -552,16 +572,16 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
         </div>
 
         {/* Video Format Selector (MP4 vs WebM) */}
-        <div className="flex items-center justify-between text-xs font-bold text-slate-400 pt-1">
+        <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400 pt-1">
           <span>Format de téléchargement :</span>
-          <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+          <div className="flex bg-slate-100 border-slate-200 dark:bg-slate-950 dark:border-slate-800 p-1 rounded-lg border">
             <button
               type="button"
               onClick={() => setExportFormat('mp4')}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition flex items-center gap-1 ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition flex items-center gap-1 cursor-pointer ${
                 exportFormat === 'mp4'
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
               }`}
             >
               <Smartphone size={12} />
@@ -570,10 +590,10 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
             <button
               type="button"
               onClick={() => setExportFormat('webm')}
-              className={`px-2 py-1 rounded-md text-[11px] font-bold transition ${
+              className={`px-2 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
                 exportFormat === 'webm'
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
               }`}
             >
               WebM
@@ -588,7 +608,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
             handleExport(exportFormat);
           }}
           disabled={isExporting}
-          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-sm shadow-xl shadow-blue-900/40 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-sm shadow-xl shadow-blue-600/20 dark:shadow-blue-900/40 flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
         >
           <Download size={18} />
           <span>
@@ -599,7 +619,7 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
         </button>
 
         {exportStatus && (
-          <div className="p-2 rounded-lg bg-red-950/60 border border-red-500/40 text-red-300 text-xs text-center">
+          <div className="p-2 rounded-lg bg-red-50 border-red-200 text-red-700 dark:bg-red-950/60 dark:border-red-500/40 dark:text-red-300 border text-xs text-center">
             {exportStatus}
           </div>
         )}

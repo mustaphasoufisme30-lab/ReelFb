@@ -146,14 +146,14 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 dark:bg-black/90 backdrop-blur-md animate-fadeIn"
       dir={isArabic ? 'rtl' : 'ltr'}
     >
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col max-h-[95vh] overflow-y-auto">
+      <div className="relative w-full max-w-lg bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-700/80 border rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col max-h-[95vh] overflow-y-auto">
         {/* Cancel button */}
         <button
           onClick={handleCancel}
-          className="absolute top-4 right-4 p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition cursor-pointer"
+          className="absolute top-4 right-4 p-2 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700 transition cursor-pointer"
           title="Annuler"
         >
           <X size={18} />
@@ -161,7 +161,7 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
 
         {/* Header */}
         <div className="text-center mb-4 pr-6 pl-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-bold mb-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/15 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 border border-blue-500/30 text-xs font-bold mb-2">
             <Film size={13} className="animate-pulse" />
             <span>
               {isArabic
@@ -169,12 +169,12 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
                 : 'Compilation Turbo MP4 (4 Scènes - 20s)'}
             </span>
           </div>
-          <h3 className="text-base sm:text-lg font-black text-white">
+          <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
             {isArabic
               ? 'إنشاء جميع المشاهد الأربعة للهاتف'
               : 'Création haute vitesse des 4 scènes pour mobile'}
           </h3>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             {isArabic
               ? 'يتم تجميع كل مشهد بدقة (0-20 ثانية) مع الخلفية والمؤثرات الصوتية'
               : 'Encodage garanti de chaque scène (0 à 20s) avec votre photo et audio'}
@@ -203,9 +203,9 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
 
           {/* Real-time 4-Scene Stepper */}
           <div className="flex-1 w-full space-y-2">
-            <div className="text-xs font-black text-slate-300 flex items-center justify-between mb-1">
+            <div className="text-xs font-black text-slate-700 dark:text-slate-300 flex items-center justify-between mb-1">
               <span>{isArabic ? 'المشاهد الـ 4 المضمنة :' : 'Progression des 4 scènes :'}</span>
-              <span className="text-emerald-400 font-mono">
+              <span className="text-emerald-600 dark:text-emerald-400 font-mono">
                 {progress.currentSecond.toFixed(1)}s / 20.0s
               </span>
             </div>
@@ -223,31 +223,31 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
                   key={step.index}
                   className={`p-2 rounded-xl border text-xs transition-all ${
                     isCurrent
-                      ? 'bg-blue-950/60 border-blue-500 shadow-md shadow-blue-950/40'
+                      ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/60 dark:border-blue-500 shadow-md'
                       : isPast
-                      ? 'bg-slate-800/40 border-emerald-500/30 text-slate-300'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-500'
+                      ? 'bg-emerald-50/70 border-emerald-500/40 text-slate-700 dark:bg-slate-800/40 dark:border-emerald-500/30 dark:text-slate-300'
+                      : 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-900/60 dark:border-slate-800 dark:text-slate-500'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {isPast ? (
-                        <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
+                        <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
                       ) : isCurrent ? (
                         <Loader2
                           size={14}
-                          className="text-blue-400 animate-spin flex-shrink-0"
+                          className="text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-3.5 h-3.5 rounded-full border border-slate-600 flex-shrink-0" />
+                        <div className="w-3.5 h-3.5 rounded-full border border-slate-400 dark:border-slate-600 flex-shrink-0" />
                       )}
-                      <span className={`font-bold ${isCurrent ? 'text-white' : ''}`}>
+                      <span className={`font-bold ${isCurrent ? 'text-slate-900 dark:text-white' : ''}`}>
                         {isArabic ? step.labelAr : step.labelFr}
                       </span>
                     </div>
                     <span className="text-[11px] font-mono opacity-80">{step.timing}</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 pr-5 pl-5">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 pr-5 pl-5">
                     {isArabic ? step.descAr : step.descFr}
                   </div>
                 </div>
@@ -258,11 +258,11 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
 
         {/* Global Progress Bar */}
         <div className="space-y-1.5 mb-3">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
             <span className="truncate max-w-[280px]">{progress.status}</span>
-            <span className="font-mono text-blue-400 font-bold">{progress.percent}%</span>
+            <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">{progress.percent}%</span>
           </div>
-          <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden p-0.5">
+          <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden p-0.5">
             <div
               className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-150"
               style={{ width: `${progress.percent}%` }}
@@ -271,8 +271,8 @@ export const ExportProgressModal: React.FC<ExportProgressModalProps> = ({
         </div>
 
         {/* Info tip */}
-        <div className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-[11px] text-slate-400 flex items-center gap-2">
-          <Smartphone size={16} className="text-emerald-400 flex-shrink-0" />
+        <div className="p-2.5 rounded-xl bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800/60 dark:border-slate-700/60 dark:text-slate-400 border text-[11px] flex items-center gap-2">
+          <Smartphone size={16} className="text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           <span>
             {isArabic
               ? 'تجميع سريع بجميع المشاهد الأربعة (0 إلى 20 ثانية) بصيغة MP4 متوافقة مع الهاتف.'

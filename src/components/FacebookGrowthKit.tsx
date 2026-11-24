@@ -47,14 +47,14 @@ export const FacebookGrowthKit: React.FC<FacebookGrowthKitProps> = ({ project })
   return (
     <div className="space-y-4">
       {/* Viral Score Card */}
-      <div className="p-4 bg-gradient-to-r from-blue-950/40 via-indigo-950/40 to-slate-900 border border-blue-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-slate-50 border-blue-200 dark:from-blue-950/40 dark:via-indigo-950/40 dark:to-slate-900 dark:border-blue-500/30 border rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="relative flex items-center justify-center">
-            <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex flex-col items-center justify-center shadow-lg shadow-blue-950/50">
-              <span className="text-xl font-black text-blue-400">
+            <div className="w-16 h-16 rounded-2xl bg-blue-600/10 border-blue-500/30 dark:bg-blue-600/20 dark:border-blue-500/40 border flex flex-col items-center justify-center shadow-sm dark:shadow-lg dark:shadow-blue-950/50">
+              <span className="text-xl font-black text-blue-600 dark:text-blue-400">
                 {project.viralityScore}
               </span>
-              <span className="text-[10px] uppercase font-bold text-slate-400">
+              <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">
                 / 100
               </span>
             </div>
@@ -62,12 +62,12 @@ export const FacebookGrowthKit: React.FC<FacebookGrowthKitProps> = ({ project })
 
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="text-sm font-bold text-white">Score Viral Facebook</h4>
-              <span className="text-xs font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">Score Viral Facebook</h4>
+              <span className="text-xs font-black px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30">
                 {project.hookRating}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-sm">
               {project.retentionTip}
             </p>
           </div>
@@ -76,30 +76,30 @@ export const FacebookGrowthKit: React.FC<FacebookGrowthKitProps> = ({ project })
         <div className="flex sm:flex-col items-center sm:items-end gap-2 w-full sm:w-auto justify-end">
           <button
             onClick={handleDownloadSRT}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 border transition cursor-pointer"
             title="Télécharger le fichier .SRT pour l'importer sur Facebook"
           >
-            <Download size={14} className="text-blue-400" />
+            <Download size={14} className="text-blue-600 dark:text-blue-400" />
             <span>Fichier .SRT</span>
           </button>
         </div>
       </div>
 
       {/* Ready-to-copy Facebook Caption Box */}
-      <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2.5">
+      <div className="p-4 bg-slate-50 border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 border rounded-2xl space-y-2.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-            <FileText size={14} className="text-blue-400" />
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <FileText size={14} className="text-blue-600 dark:text-blue-400" />
             <span>Texte de Publication Facebook (Prêt à poster) :</span>
           </label>
 
           <button
             onClick={handleCopyCaption}
-            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-600/10 hover:bg-blue-600/20 text-blue-700 dark:bg-blue-600/20 dark:hover:bg-blue-600/30 dark:text-blue-300 border border-blue-500/30 transition-colors cursor-pointer"
           >
             {copiedCaption ? (
               <>
-                <Check size={13} className="text-emerald-400" />
+                <Check size={13} className="text-emerald-600 dark:text-emerald-400" />
                 <span>Copié !</span>
               </>
             ) : (
@@ -113,27 +113,27 @@ export const FacebookGrowthKit: React.FC<FacebookGrowthKitProps> = ({ project })
 
         <div
           dir={/[\u0600-\u06FF]/.test(project.fbPostCaption) ? 'rtl' : 'ltr'}
-          className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-200 whitespace-pre-wrap leading-relaxed font-sans select-all"
+          className="p-3 bg-white border-slate-200 text-slate-800 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-200 border rounded-xl text-xs whitespace-pre-wrap leading-relaxed font-sans select-all"
         >
           {project.fbPostCaption}
         </div>
       </div>
 
       {/* Hashtags */}
-      <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2.5">
+      <div className="p-4 bg-slate-50 border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 border rounded-2xl space-y-2.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-            <TrendingUp size={14} className="text-emerald-400" />
+          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+            <TrendingUp size={14} className="text-emerald-600 dark:text-emerald-400" />
             <span>Hashtags Viraux Recommandés :</span>
           </label>
 
           <button
             onClick={handleCopyTags}
-            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 transition cursor-pointer"
           >
             {copiedTags ? (
               <>
-                <Check size={13} className="text-emerald-400" />
+                <Check size={13} className="text-emerald-600 dark:text-emerald-400" />
                 <span>Copié !</span>
               </>
             ) : (
@@ -152,7 +152,7 @@ export const FacebookGrowthKit: React.FC<FacebookGrowthKitProps> = ({ project })
           {project.hashtags.map((tag, idx) => (
             <span
               key={idx}
-              className="text-xs font-medium px-2.5 py-1 rounded-lg bg-blue-950/40 text-blue-300 border border-blue-800/40"
+              className="text-xs font-medium px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/40 border"
             >
               {tag}
             </span>
@@ -161,20 +161,20 @@ export const FacebookGrowthKit: React.FC<FacebookGrowthKitProps> = ({ project })
       </div>
 
       {/* Facebook Algorithm Strategy Tips */}
-      <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-2xl space-y-2">
-        <h5 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-          <Clock size={14} className="text-amber-400" />
+      <div className="p-4 bg-slate-50/80 border-slate-200 dark:bg-slate-900/40 dark:border-slate-800/80 border rounded-2xl space-y-2">
+        <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+          <Clock size={14} className="text-amber-500 dark:text-amber-400" />
           <span>Conseils de publication pour l'algorithme Facebook :</span>
         </h5>
-        <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
+        <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 list-disc list-inside">
           <li>
-            <strong className="text-slate-200">Meilleurs horaires :</strong> Entre 12h-14h et 18h30-21h30 pour maximiser les vues initiales.
+            <strong className="text-slate-800 dark:text-slate-200">Meilleurs horaires :</strong> Entre 12h-14h et 18h30-21h30 pour maximiser les vues initiales.
           </li>
           <li>
-            <strong className="text-slate-200">Épinglez un commentaire :</strong> Posez une question ouverte ("D'accord ou pas d'accord ?") pour générer 3x plus d'engagement.
+            <strong className="text-slate-800 dark:text-slate-200">Épinglez un commentaire :</strong> Posez une question ouverte ("D'accord ou pas d'accord ?") pour générer 3x plus d'engagement.
           </li>
           <li>
-            <strong className="text-slate-200">Boucle parfaite :</strong> La scène 4 (CTA) reconnecte avec la scène 1 (Accroche), ce qui pousse les utilisateurs à revoir la vidéo deux fois.
+            <strong className="text-slate-800 dark:text-slate-200">Boucle parfaite :</strong> La scène 4 (CTA) reconnecte avec la scène 1 (Accroche), ce qui pousse les utilisateurs à revoir la vidéo deux fois.
           </li>
         </ul>
       </div>

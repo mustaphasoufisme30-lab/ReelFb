@@ -366,7 +366,7 @@ Audience cible : ${targetAudience}
 Style visuel : ${visualStyle}`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+      model: "gemini-4-hydrogen",
       contents: prompt,
       config: {
         systemInstruction,
@@ -630,7 +630,7 @@ app.post("/api/refine-scene", async (req, res) => {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+      model: "gemini-4-hydrogen",
       contents: `Réécris cette scène de Réel Facebook (${currentScene.duration} secondes) selon cette consigne : "${
         instruction || "Rends-la plus percutante"
       }".
@@ -677,97 +677,133 @@ Scène actuelle :
 });
 
 function createFallbackReel(idea: string, tone: string, language: string) {
+  const cleanIdea = (idea || "").trim().replace(/\s+/g, " ");
   const isArabic =
-    language === "arabe" || language === "ar" || /[\u0600-\u06FF]/.test(idea);
+    language === "arabe" || language === "ar" || /[\u0600-\u06FF]/.test(cleanIdea);
+  const isEnglish =
+    !isArabic && (language === "anglais" || language === "en" || language === "english");
+
+  // Break the user's idea into natural clauses/phrases so every scene reflects their actual input
+  const rawParts = cleanIdea
+    .split(/[.!؟?;\n،,]+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 2);
+
+  const truncateWords = (text: string, maxLen: number) => {
+    if (text.length <= maxLen) return text;
+    const cut = text.slice(0, maxLen);
+    const lastSpace = cut.lastIndexOf(" ");
+    return (lastSpace > 15 ? cut.slice(0, lastSpace) : cut).trim() + "…";
+  };
+
+  const words = cleanIdea.split(/\s+/).filter(Boolean);
+  const shortTopic = words.slice(0, 6).join(" ");
+  const headlineTopic = words.slice(0, 4).join(" ");
+  const part1 = rawParts[0] || cleanIdea;
+  const part2 = rawParts[1] || cleanIdea;
+  const part3 = rawParts[2] || rawParts[1] || cleanIdea;
+  const sub1 = truncateWords(part1, 46);
+  const sub2 = truncateWords(part3, 50);
+
+  // Extract topic-based hashtags from the user's idea
+  const stopWords = new Set([
+    "pour", "avec", "dans", "sans", "comment", "pourquoi", "votre", "notre", "cette", "mais", "plus", "tout", "faire",
+    "this", "that", "with", "from", "your", "about", "what", "when", "have", "will",
+    "على", "في", "من", "إلى", "عن", "كيف", "لماذا", "هذا", "هذه", "التي", "الذي", "مع", "أو", "كل",
+  ]);
+  const dynamicTags = words
+    .map((w) => w.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter((w) => w.length >= 4 && !stopWords.has(w.toLowerCase()))
+    .slice(0, 3)
+    .map((w) => `#${w}`);
+
+  const now = Date.now();
 
   if (isArabic) {
+    const toneConfig: Record<string, { hook: string; badge1: string; theme1: string; rating: string }> = {
+      viral: { hook: `توقف! ${headlineTopic}`, badge1: "🚨 انتبه فوراً", theme1: "crimson", rating: "A+ فيروسي" },
+      "éducatif": { hook: `تعلم ${headlineTopic}`, badge1: "💡 معلومة ذهبية", theme1: "electric", rating: "A+ تعليمي" },
+      business: { hook: `سر نجاح ${headlineTopic}`, badge1: "💼 مال وأعمال", theme1: "emerald", rating: "A+ بيزنس" },
+      humour: { hook: `الحقيقة المضحكة: ${headlineTopic}`, badge1: "😂 واقع لا يصدق", theme1: "sunset", rating: "A+ ممتع" },
+      "mystérieux": { hook: `السر المخفي: ${headlineTopic}`, badge1: "🔮 سر خطير", theme1: "dark-luxe", rating: "A+ تشويق" },
+    };
+    const cfg = toneConfig[tone] || toneConfig.viral;
+
     return {
-      id: `reel-${Date.now()}`,
-      title: `سر نجاح: ${idea.slice(0, 30)}...`,
-      idea,
+      id: `reel-${now}`,
+      title: shortTopic || "ريل فيسبوك احترافي",
+      idea: cleanIdea,
       tone,
       language: "arabe",
-      hookRating: "A+ فيروسي",
-      viralityScore: 97,
+      hookRating: cfg.rating,
+      viralityScore: 96,
       retentionTip:
-        "في فيسبوك ريلز، يجذب الخط العريض الأصفر في أول ثانيتين انتباه أكثر من 85% من المشاهدين.",
+        "في فيسبوك ريلز، عرض الفكرة الرئيسية باللون الأصفر في أول 3 ثوانٍ يرفع نسبة إكمال الفيديو بأكثر من 85%.",
       recommendedBgmTrack: "إيقاع حماسي سريع (120 BPM)",
-      fbPostCaption: `⚡ توقف عن هذا فوراً! إذا كنت مهتماً بـ "${idea.slice(
-        0,
-        35
-      )}"، فإليك السر الذي يجهله 99% من الناس.\n\nشاهد الـ 20 ثانية كاملة واحفظ هذا الريل للرجوع إليه لاحقاً! 📌\n\n👇 اكتب 'تم' في التعليقات للحصول على الدليل المجاني!`,
-      hashtags: [
-        "#ريلز_فيسبوك",
-        "#نصائح_سريعة",
-        "#تطوير_الذات",
-        "#ريلز",
-        "#فيسبوك",
-        "#نجاح",
-      ],
+      fbPostCaption: `⚡ ${cleanIdea}\n\nشاهد هذا الريل القصير (20 ثانية) لتكتشف الخلاصة العملية فوراً! 🔥\n\n📌 احفظ الفيديو للرجوع إليه لاحقاً، واكتب رأيك في التعليقات 👇`,
+      hashtags: Array.from(
+        new Set([...dynamicTags, "#ريلز_فيسبوك", "#ريلز", "#فيسبوك", "#نصائح_سريعة", "#محتوى_هادف"])
+      ).slice(0, 6),
       subtitleStyle: "hormozi",
       musicMood: "energetic",
       scenes: [
         {
-          id: `scene-1-${Date.now()}`,
+          id: `scene-1-${now}`,
           order: 1,
           phase: "hook",
           phaseLabel: "المقدمة الخاطفة (0-3 ث)",
           startTime: 0,
           endTime: 3,
           duration: 3,
-          narration:
-            "توقف فوراً ! ما تفعله كل يوم يدمر نتائجك تماماً دون أن تدري.",
-          overlayTitle: "توقف عن هذا فوراً !",
-          overlaySubtitle: "99% من الناس يرتكبون هذا الخطأ...",
-          badge: "🚨 انتبه جيداً",
+          narration: `توقف فوراً! هل تعرف الحقيقة الكاملة حول ${shortTopic}؟`,
+          overlayTitle: cfg.hook,
+          overlaySubtitle: "شاهد الـ 20 ثانية كاملة...",
+          badge: cfg.badge1,
           soundEffect: "whoosh",
-          visualTheme: "crimson",
+          visualTheme: cfg.theme1,
         },
         {
-          id: `scene-2-${Date.now()}`,
+          id: `scene-2-${now}`,
           order: 2,
           phase: "problem",
-          phaseLabel: "المشكلة الكبرى (3-8 ث)",
+          phaseLabel: "المشكلة / التشويق (3-8 ث)",
           startTime: 3,
           endTime: 8,
           duration: 5,
-          narration:
-            "أنت تبذل جهداً كبيراً وتضيع ساعات طويلة يومياً دون رؤية أي تقدم حقيقي.",
-          overlayTitle: "الفخ الأكبر",
-          overlaySubtitle: "تضييع الوقت في أشياء غير مجدية",
+          narration: `أغلب الناس يخطئون عند التعامل مع ${part1} ويضيعون وقتاً طويلاً دون نتيجة.`,
+          overlayTitle: `لماذا يفشل الأغلب؟`,
+          overlaySubtitle: sub1,
           badge: "❌ الخطأ الشائع",
           soundEffect: "impact",
           visualTheme: "dark-luxe",
         },
         {
-          id: `scene-3-${Date.now()}`,
+          id: `scene-3-${now}`,
           order: 3,
           phase: "solution",
-          phaseLabel: "الحل الذكي (8-15 ث)",
+          phaseLabel: "الحل والقيمة (8-15 ث)",
           startTime: 8,
           endTime: 15,
           duration: 7,
-          narration:
-            "الحل السري يكمن في قاعدة الدقيقتين: ركز على عادة واحدة فقط وطبقها يومياً باستمرار وبدون انقطاع.",
-          overlayTitle: "قاعدة الدقيقتين",
-          overlaySubtitle: "عادة واحدة = نتائج مضاعفة 10 مرات",
-          badge: "💡 السر الحقيقي",
+          narration: `إليك الخلاصة الذهبية: ${part2}. طبق هذه الخطوة البسيطة يومياً وسترى فرقاً مذهلاً في نتائجك.`,
+          overlayTitle: headlineTopic || "الحل الذكي",
+          overlaySubtitle: sub2,
+          badge: "💡 الخلاصة العملية",
           soundEffect: "ding",
           visualTheme: "emerald",
         },
         {
-          id: `scene-4-${Date.now()}`,
+          id: `scene-4-${now}`,
           order: 4,
           phase: "cta",
           phaseLabel: "الدعوة للتفاعل (15-20 ث)",
           startTime: 15,
           endTime: 20,
           duration: 5,
-          narration:
-            "احفظ هذا الريل لتجربته اليوم، واكتب كلمة 'تم' في التعليقات لتصلك التفاصيل كاملة فوراً !",
+          narration: `احفظ هذا الريل الآن لتطبيق ${headlineTopic} اليوم، وشاركه مع صديق يحتاج هذه الفكرة!`,
           overlayTitle: "احفظ الريل الآن !",
-          overlaySubtitle: "اكتب 'تم' في التعليقات 👇",
-          badge: "🔥 ابدأ الآن",
+          overlaySubtitle: "شارك رأيك في التعليقات 👇",
+          badge: "🔥 شارك واحفظ",
           soundEffect: "pop",
           visualTheme: "electric",
         },
@@ -775,95 +811,176 @@ function createFallbackReel(idea: string, tone: string, language: string) {
     };
   }
 
+  if (isEnglish) {
+    return {
+      id: `reel-${now}`,
+      title: shortTopic || "20s Facebook Reel",
+      idea: cleanIdea,
+      tone,
+      language: "anglais",
+      hookRating: "A+ Viral",
+      viralityScore: 95,
+      retentionTip:
+        "Bold high-contrast captions in the first 3 seconds boost Facebook Reel watch-through above 85%.",
+      recommendedBgmTrack: "Electro Hype Beat (120 BPM)",
+      fbPostCaption: `⚡ ${cleanIdea}\n\nWatch these 20 seconds to get the exact takeaway! 💡\n\n👇 Save this Reel and comment 'YES' if you want more tips!`,
+      hashtags: Array.from(
+        new Set([...dynamicTags, "#FacebookReels", "#Reels20s", "#ViralTips", "#QuickGuide"])
+      ).slice(0, 6),
+      subtitleStyle: "hormozi",
+      musicMood: "energetic",
+      scenes: [
+        {
+          id: `scene-1-${now}`,
+          order: 1,
+          phase: "hook",
+          phaseLabel: "The Hook (0-3s)",
+          startTime: 0,
+          endTime: 3,
+          duration: 3,
+          narration: `Stop scrolling! Here is what nobody tells you about ${shortTopic}.`,
+          overlayTitle: headlineTopic.toUpperCase() || "STOP SCROLLING!",
+          overlaySubtitle: "Watch these 20 seconds...",
+          badge: "🚨 WAIT A SECOND",
+          soundEffect: "whoosh",
+          visualTheme: "crimson",
+        },
+        {
+          id: `scene-2-${now}`,
+          order: 2,
+          phase: "problem",
+          phaseLabel: "The Problem (3-8s)",
+          startTime: 3,
+          endTime: 8,
+          duration: 5,
+          narration: `Most people struggle with ${part1} because they overlook one crucial detail.`,
+          overlayTitle: "THE BIG MISTAKE",
+          overlaySubtitle: sub1,
+          badge: "❌ 90% DO THIS",
+          soundEffect: "impact",
+          visualTheme: "dark-luxe",
+        },
+        {
+          id: `scene-3-${now}`,
+          order: 3,
+          phase: "solution",
+          phaseLabel: "The Solution (8-15s)",
+          startTime: 8,
+          endTime: 15,
+          duration: 7,
+          narration: `Here is the key: ${part2}. Apply it step by step starting today for instant clarity and results.`,
+          overlayTitle: "THE REAL METHOD",
+          overlaySubtitle: sub2,
+          badge: "💡 KEY TAKEAWAY",
+          soundEffect: "ding",
+          visualTheme: "emerald",
+        },
+        {
+          id: `scene-4-${now}`,
+          order: 4,
+          phase: "cta",
+          phaseLabel: "Call to Action (15-20s)",
+          startTime: 15,
+          endTime: 20,
+          duration: 5,
+          narration: `Save this Reel to remember ${headlineTopic}, and share it with someone who needs it!`,
+          overlayTitle: "SAVE THIS REEL!",
+          overlaySubtitle: "Comment 'YES' below 👇",
+          badge: "🔥 TAKE ACTION",
+          soundEffect: "pop",
+          visualTheme: "electric",
+        },
+      ],
+    };
+  }
+
+  // French (default)
+  const toneFr: Record<string, { badge: string; theme: string; hookPrefix: string; rating: string }> = {
+    viral: { badge: "🚨 ATTENTION", theme: "crimson", hookPrefix: "ARRÊTE TOUT !", rating: "A+ Viral" },
+    "éducatif": { badge: "💡 ASTUCE CLÉ", theme: "electric", hookPrefix: "LE SAVIEZ-VOUS ?", rating: "A+ Éducatif" },
+    business: { badge: "💼 STRATÉGIE", theme: "emerald", hookPrefix: "MÉTHODE PRO :", rating: "A+ Business" },
+    humour: { badge: "😂 VÉRITÉ", theme: "sunset", hookPrefix: "ON EN PARLE ?", rating: "A+ Humour" },
+    "mystérieux": { badge: "🔮 RÉVÉLATION", theme: "dark-luxe", hookPrefix: "LE SECRET DE", rating: "A+ Mystère" },
+  };
+  const cfgFr = toneFr[tone] || toneFr.viral;
+
   return {
-    id: `reel-${Date.now()}`,
-    title: `Le Secret de : ${idea.slice(0, 30)}...`,
-    idea,
+    id: `reel-${now}`,
+    title: shortTopic || "Réel Facebook 20s",
+    idea: cleanIdea,
     tone,
-    language,
-    hookRating: "A+ Viral",
+    language: language || "français",
+    hookRating: cfgFr.rating,
     viralityScore: 95,
     retentionTip:
-      "Sur Facebook, affichez le titre en gros caractères jaunes contrastés dès la première seconde.",
-    recommendedBgmTrack: "Électro Hype & Bass",
-    fbPostCaption: `⚡ ARRÊTEZ TOUT ! Si vous vous intéressez à "${idea.slice(
-      0,
-      40
-    )}", voici ce que 99% des gens ignorent.\n\nRegardez cette vidéo de 20s et enregistrez-la pour ne pas l'oublier ! 📌\n\n👇 Commentez 'GO' pour recevoir le guide complet !`,
-    hashtags: [
-      "#ReelsFacebook",
-      "#Astuce20s",
-      "#ViralVideo",
-      "#Productivite",
-      "#Mindset",
-      "#FacebookReels",
-    ],
+      "Sur Facebook, un titre contrasté dès la première seconde lié directement à votre sujet retient 3x plus de spectateurs.",
+    recommendedBgmTrack: "Électro Hype & Bass (120 BPM)",
+    fbPostCaption: `⚡ ${cleanIdea}\n\nDécouvrez l'essentiel en seulement 20 secondes ! 💡\n\n📌 Enregistrez ce Réel pour le revoir plus tard et partagez-le avec un ami 👇`,
+    hashtags: Array.from(
+      new Set([...dynamicTags, "#ReelsFacebook", "#Astuce20s", "#FacebookReels", "#ConseilDuJour", "#Viral"])
+    ).slice(0, 6),
     subtitleStyle: "hormozi",
     musicMood: "energetic",
     scenes: [
       {
-        id: `scene-1-${Date.now()}`,
+        id: `scene-1-${now}`,
         order: 1,
         phase: "hook",
         phaseLabel: "L'Accroche (0-3s)",
         startTime: 0,
         endTime: 3,
         duration: 3,
-        narration:
-          "Arrête tout ! Ce que tu crois savoir sur ce sujet est complètement faux.",
-        overlayTitle: "ARRÊTE TOUT !",
-        overlaySubtitle: "99% des gens se trompent...",
-        badge: "🚨 ATTENTION",
+        narration: `Arrête tout ! Voici ce que presque personne ne sait sur ${shortTopic}.`,
+        overlayTitle: headlineTopic.toUpperCase() || cfgFr.hookPrefix,
+        overlaySubtitle: "Regarde ces 20 secondes...",
+        badge: cfgFr.badge,
         soundEffect: "whoosh",
-        visualTheme: "electric",
+        visualTheme: cfgFr.theme,
       },
       {
-        id: `scene-2-${Date.now()}`,
+        id: `scene-2-${now}`,
         order: 2,
         phase: "problem",
         phaseLabel: "Le Problème (3-8s)",
         startTime: 3,
         endTime: 8,
         duration: 5,
-        narration:
-          "Tu passes des heures à essayer d'obtenir des résultats, sans jamais voir la moindre différence.",
-        overlayTitle: "LE GROS PROBLÈME",
-        overlaySubtitle: "Tu perds un temps précieux chaque jour.",
-        badge: "❌ L'ERREUR CLASSIQUE",
+        narration: `La plupart des gens bloquent sur ${part1} parce qu'ils utilisent la mauvaise approche dès le départ.`,
+        overlayTitle: "L'ERREUR À ÉVITER",
+        overlaySubtitle: sub1,
+        badge: "❌ LE PIÈGE",
         soundEffect: "impact",
-        visualTheme: "crimson",
+        visualTheme: "dark-luxe",
       },
       {
-        id: `scene-3-${Date.now()}`,
+        id: `scene-3-${now}`,
         order: 3,
         phase: "solution",
         phaseLabel: "La Solution (8-15s)",
         startTime: 8,
         endTime: 15,
         duration: 7,
-        narration:
-          "La méthode secrète consiste à faire exactement l'inverse : cible une seule action et applique-la 5 minutes par jour.",
-        overlayTitle: "LA MÉTHODE INVERSÉE",
-        overlaySubtitle: "1 seule action = 10x plus d'impact",
+        narration: `Voici la clé concrète : ${part2}. Mets cette idée en pratique dès aujourd'hui pour voir la différence rapidement.`,
+        overlayTitle: "LA BONNE MÉTHODE",
+        overlaySubtitle: sub2,
         badge: "💡 LA SOLUTION",
         soundEffect: "ding",
         visualTheme: "emerald",
       },
       {
-        id: `scene-4-${Date.now()}`,
+        id: `scene-4-${now}`,
         order: 4,
         phase: "cta",
         phaseLabel: "L'Appel à l'Action (15-20s)",
         startTime: 15,
         endTime: 20,
         duration: 5,
-        narration:
-          "Enregistre ce réel pour tester dès ce soir, et commente RÉEL pour recevoir la suite !",
+        narration: `Enregistre ce réel pour appliquer ${headlineTopic} dès ce soir, et commente GO pour la suite !`,
         overlayTitle: "ENREGISTRE CE RÉEL !",
-        overlaySubtitle: "Commente 'RÉEL' en bas 👇",
+        overlaySubtitle: "Commente 'GO' en bas 👇",
         badge: "🔥 PASSE À L'ACTION",
         soundEffect: "pop",
-        visualTheme: "sunset",
+        visualTheme: "electric",
       },
     ],
   };
