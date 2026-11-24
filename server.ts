@@ -344,15 +344,28 @@ function isTransientError(err: any): boolean {
   );
 }
 
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("DEADLINE_EXCEEDED: Timeout")), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 1): Promise<T> {
   let lastErr: any;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await fn();
+      return await withTimeout(fn(), 14000);
     } catch (err: any) {
       lastErr = err;
-      if (attempt < maxRetries && isTransientError(err)) {
-        const delayMs = 800 * Math.pow(2, attempt);
+      const isTimeout = String(err?.message || "").includes("DEADLINE_EXCEEDED");
+      if (attempt < maxRetries && !isTimeout && isTransientError(err)) {
+        const delayMs = 600 * Math.pow(2, attempt);
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
@@ -426,118 +439,138 @@ Ton : ${tone}
 Audience cible : ${targetAudience}
 Style visuel : ${visualStyle}`;
 
-    const response = await withRetry(() =>
-      ai.models.generateContent({
-        model: "gemini-4-hydrogen",
-        contents: prompt,
-        config: {
-          systemInstruction,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: {
-              type: Type.STRING,
-              description: "Titre percutant du Réel Facebook",
-            },
-            hookRating: {
-              type: Type.STRING,
-              description: "Score de l'accroche (ex: 'A+ Explosif')",
-            },
-            viralityScore: {
-              type: Type.INTEGER,
-              description: "Score de potentiel viral de 1 à 100",
-            },
-            retentionTip: {
-              type: Type.STRING,
-              description: "Conseil clé pour maximiser la rétention sur Facebook",
-            },
-            recommendedBgmTrack: {
-              type: Type.STRING,
-              description:
-                "Ambiance musicale recommandée (ex: 'Électro Hype', 'Lofi Chill', 'Suspense Beat')",
-            },
-            fbPostCaption: {
-              type: Type.STRING,
-              description: "Texte complet du post Facebook avec emojis et saut de lignes",
-            },
-            hashtags: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
-              description: "5 à 8 hashtags viraux Facebook",
-            },
-            scenes: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  order: { type: Type.INTEGER },
-                  phase: {
-                    type: Type.STRING,
-                    description: "hook | problem | solution | cta",
-                  },
-                  phaseLabel: { type: Type.STRING },
-                  startTime: { type: Type.NUMBER },
-                  endTime: { type: Type.NUMBER },
-                  duration: { type: Type.NUMBER },
-                  narration: {
-                    type: Type.STRING,
-                    description: "Script exact prononcé par la voix off",
-                  },
-                  overlayTitle: {
-                    type: Type.STRING,
-                    description: "Titre principal court affiché à l'écran en gros",
-                  },
-                  overlaySubtitle: {
-                    type: Type.STRING,
-                    description: "Texte secondaire ou sous-titre clé",
-                  },
-                  badge: {
-                    type: Type.STRING,
-                    description:
-                      "Sticker ou badge textuel (ex: '🚨 ATTENTION', '💡 ASTUCE', '👇 AGIS')",
-                  },
-                  soundEffect: {
-                    type: Type.STRING,
-                    description: "whoosh | ding | pop | impact",
-                  },
-                  visualTheme: {
-                    type: Type.STRING,
-                    description: "cyber | sunset | dark-luxe | electric | emerald | crimson",
-                  },
-                },
-                required: [
-                  "order",
-                  "phase",
-                  "phaseLabel",
-                  "startTime",
-                  "endTime",
-                  "duration",
-                  "narration",
-                  "overlayTitle",
-                  "overlaySubtitle",
-                  "badge",
-                  "soundEffect",
-                  "visualTheme",
-                ],
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        title: {
+          type: Type.STRING,
+          description: "Titre percutant du Réel Facebook",
+        },
+        hookRating: {
+          type: Type.STRING,
+          description: "Score de l'accroche (ex: 'A+ Explosif')",
+        },
+        viralityScore: {
+          type: Type.INTEGER,
+          description: "Score de potentiel viral de 1 à 100",
+        },
+        retentionTip: {
+          type: Type.STRING,
+          description: "Conseil clé pour maximiser la rétention sur Facebook",
+        },
+        recommendedBgmTrack: {
+          type: Type.STRING,
+          description:
+            "Ambiance musicale recommandée (ex: 'Électro Hype', 'Lofi Chill', 'Suspense Beat')",
+        },
+        fbPostCaption: {
+          type: Type.STRING,
+          description: "Texte complet du post Facebook avec emojis et saut de lignes",
+        },
+        hashtags: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "5 à 8 hashtags viraux Facebook",
+        },
+        scenes: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              order: { type: Type.INTEGER },
+              phase: {
+                type: Type.STRING,
+                description: "hook | problem | solution | cta",
+              },
+              phaseLabel: { type: Type.STRING },
+              startTime: { type: Type.NUMBER },
+              endTime: { type: Type.NUMBER },
+              duration: { type: Type.NUMBER },
+              narration: {
+                type: Type.STRING,
+                description: "Script exact prononcé par la voix off",
+              },
+              overlayTitle: {
+                type: Type.STRING,
+                description: "Titre principal court affiché à l'écran en gros",
+              },
+              overlaySubtitle: {
+                type: Type.STRING,
+                description: "Texte secondaire ou sous-titre clé",
+              },
+              badge: {
+                type: Type.STRING,
+                description:
+                  "Sticker ou badge textuel (ex: '🚨 ATTENTION', '💡 ASTUCE', '👇 AGIS')",
+              },
+              soundEffect: {
+                type: Type.STRING,
+                description: "whoosh | ding | pop | impact",
+              },
+              visualTheme: {
+                type: Type.STRING,
+                description: "cyber | sunset | dark-luxe | electric | emerald | crimson",
               },
             },
+            required: [
+              "order",
+              "phase",
+              "phaseLabel",
+              "startTime",
+              "endTime",
+              "duration",
+              "narration",
+              "overlayTitle",
+              "overlaySubtitle",
+              "badge",
+              "soundEffect",
+              "visualTheme",
+            ],
           },
-          required: [
-            "title",
-            "hookRating",
-            "viralityScore",
-            "retentionTip",
-            "recommendedBgmTrack",
-            "fbPostCaption",
-            "hashtags",
-            "scenes",
-          ],
         },
       },
-      })
-    );
+      required: [
+        "title",
+        "hookRating",
+        "viralityScore",
+        "retentionTip",
+        "recommendedBgmTrack",
+        "fbPostCaption",
+        "hashtags",
+        "scenes",
+      ],
+    };
+
+    let response;
+    try {
+      response = await withRetry(() =>
+        ai.models.generateContent({
+          model: "gemini-4-hydrogen",
+          contents: prompt,
+          config: {
+            systemInstruction,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            responseMimeType: "application/json",
+            responseSchema,
+          },
+        })
+      );
+    } catch (primaryErr: any) {
+      if (isAuthError(primaryErr)) throw primaryErr;
+      console.warn("Primary model failed, retrying with gemini-3.1-flash-lite:", primaryErr?.message || primaryErr);
+      response = await withTimeout(
+        ai.models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: prompt,
+          config: {
+            systemInstruction,
+            responseMimeType: "application/json",
+            responseSchema,
+          },
+        }),
+        20000
+      );
+    }
 
     const parsedData = parseJsonResponse(response.text);
 
@@ -550,6 +583,9 @@ Style visuel : ${visualStyle}`;
     ];
 
     const rawScenes = Array.isArray(parsedData.scenes) ? parsedData.scenes : [];
+    if (rawScenes.length === 0) {
+      throw new Error("Réponse IA incomplète (aucune scène générée).");
+    }
     const adjustedScenes = defaultTimings.map((timing, idx) => {
       const scene = rawScenes[idx] || {};
       const defaultSfx = idx === 0 ? "whoosh" : idx === 1 ? "impact" : idx === 2 ? "ding" : "pop";
@@ -761,6 +797,13 @@ Scène actuelle :
     }
     res.status(502).json({ error: error?.message || "Erreur d'optimisation" });
   }
+});
+
+// Always return JSON errors for /api routes (never HTML or raw objects)
+app.use("/api", (err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = Number(err?.status || err?.statusCode) || 500;
+  const msg = typeof err?.message === "string" && err.message ? err.message : "Erreur interne du serveur.";
+  res.status(status).json({ error: msg });
 });
 
 // Vite integration

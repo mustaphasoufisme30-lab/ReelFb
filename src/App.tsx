@@ -235,9 +235,55 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), type === 'error' ? 5500 : 3500);
+  const extractErrorMessage = (input: unknown, fallback: string): string => {
+    if (!input) return fallback;
+    if (typeof input === 'string') {
+      const trimmed = input.trim();
+      if (!trimmed || trimmed === '[object Object]') return fallback;
+      // If the string itself is JSON (e.g. serialized ApiError), try to unwrap .error.message
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          return extractErrorMessage(JSON.parse(trimmed), fallback);
+        } catch {
+          return trimmed;
+        }
+      }
+      return trimmed;
+    }
+    if (input instanceof Error) {
+      return extractErrorMessage(input.message, fallback);
+    }
+    if (typeof input === 'object') {
+      const obj = input as Record<string, unknown>;
+      if (obj.error !== undefined) {
+        const nested = extractErrorMessage(obj.error, '');
+        if (nested) return nested;
+      }
+      if (obj.message !== undefined) {
+        const nested = extractErrorMessage(obj.message, '');
+        if (nested) return nested;
+      }
+      if (typeof obj.statusText === 'string' && obj.statusText.trim()) {
+        return obj.statusText.trim();
+      }
+      if (typeof obj.status === 'string' && obj.status.trim()) {
+        return obj.status.trim();
+      }
+      try {
+        const serialized = JSON.stringify(obj);
+        if (serialized && serialized !== '{}') return serialized.slice(0, 220);
+      } catch {}
+    }
+    return fallback;
+  };
+
+  const showToast = (message: unknown, type: 'success' | 'error' = 'success') => {
+    const safeMessage = extractErrorMessage(
+      message,
+      type === 'error' ? 'Une erreur est survenue.' : 'Opération réussie.'
+    );
+    setNotification({ message: safeMessage, type });
+    setTimeout(() => setNotification(null), type === 'error' ? 6000 : 3500);
   };
 
   const handleGenerateReel = async (data: {
@@ -273,12 +319,12 @@ export default function App() {
       }
 
       if (!response.ok) {
-        const retryable = [502, 503, 504].includes(response.status);
-        const msg =
-          parsed?.error ||
-          (data.language === 'arabe'
+        const retryable = [408, 429, 500, 502, 503, 504].includes(response.status);
+        const fallbackMsg =
+          data.language === 'arabe'
             ? `خطأ في الخادم (${response.status}). يرجى المحاولة مرة أخرى.`
-            : `Erreur serveur (${response.status}). Veuillez réessayer.`);
+            : `Erreur serveur (${response.status}). Veuillez réessayer.`;
+        const msg = extractErrorMessage(parsed?.error ?? parsed, fallbackMsg);
         const err: any = new Error(msg);
         err.retryable = retryable;
         throw err;
@@ -326,11 +372,11 @@ export default function App() {
       );
     } catch (err: any) {
       console.error('Generation failed:', err);
-      const errMsg =
-        err?.message ||
-        (data.language === 'arabe'
+      const fallbackErr =
+        data.language === 'arabe'
           ? 'حدث خطأ أثناء إنشاء الريل. يرجى المحاولة مجدداً.'
-          : 'Erreur lors de la génération. Veuillez réessayer.');
+          : 'Erreur lors de la génération. Veuillez réessayer.';
+      const errMsg = extractErrorMessage(err, fallbackErr);
       setGenerationError(errMsg);
       showToast(errMsg, 'error');
     } finally {

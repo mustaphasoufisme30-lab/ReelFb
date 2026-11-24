@@ -645,7 +645,11 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
         }}
         onError={(err) => {
           setIsExporting(false);
-          setExportStatus("Erreur lors de l'exportation : " + (err.message || 'Erreur inconnue'));
+          const msg =
+            typeof err?.message === 'string' && err.message.trim() && err.message !== '[object Object]'
+              ? err.message
+              : 'Erreur inconnue';
+          setExportStatus("Erreur lors de l'exportation : " + msg);
         }}
       />
 
