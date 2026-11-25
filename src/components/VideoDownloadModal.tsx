@@ -41,15 +41,35 @@ export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
       const a = document.createElement('a');
       a.href = videoUrl;
       a.download = filename;
-      a.target = '_blank';
       document.body.appendChild(a);
       a.click();
       setTimeout(() => document.body.removeChild(a), 1000);
     }
   };
 
-  const handleOpenDirect = () => {
-    window.open(videoUrl, '_blank');
+  const canShareFile =
+    typeof navigator !== 'undefined' &&
+    typeof navigator.share === 'function' &&
+    typeof File !== 'undefined' &&
+    Boolean(videoBlob);
+
+  const handleMobileShareSave = async () => {
+    if (!videoBlob) return;
+    try {
+      const file = new File([videoBlob], filename, {
+        type: videoFormat === 'mp4' ? 'video/mp4' : 'video/webm',
+      });
+      if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+        handleDownload();
+        return;
+      }
+      await navigator.share({
+        title: projectTitle || 'Mon Réel Facebook 20s',
+        files: [file],
+      });
+    } catch {
+      // User cancelled share sheet or unsupported; fallback to direct download
+    }
   };
 
   return (
@@ -126,13 +146,25 @@ export const VideoDownloadModal: React.FC<VideoDownloadModalProps> = ({
             <span>Télécharger le Réel ({videoFormat.toUpperCase()})</span>
           </button>
 
-          <button
-            onClick={handleOpenDirect}
-            className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 font-bold text-xs border transition flex items-center justify-center gap-2 cursor-pointer"
+          {canShareFile && (
+            <button
+              onClick={handleMobileShareSave}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <Share2 size={15} />
+              <span>Enregistrer dans la Galerie / Partager</span>
+            </button>
+          )}
+
+          <a
+            href={videoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 font-bold text-xs border transition flex items-center justify-center gap-2"
           >
             <ExternalLink size={14} className="text-blue-600 dark:text-blue-400" />
             <span>Ouvrir dans un nouvel onglet plein écran</span>
-          </button>
+          </a>
         </div>
 
         {/* Smartphone Instructions Helper */}
