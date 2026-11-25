@@ -16,7 +16,6 @@ import {
   Sun,
   Moon,
   AlertCircle,
-  Lock,
 } from 'lucide-react';
 import { ReelProject } from './types/reel';
 import { IdeaGenerator } from './components/IdeaGenerator';
@@ -56,7 +55,6 @@ const INITIAL_PROJECT_FR: ReelProject = {
   ],
   subtitleStyle: 'hormozi',
   musicMood: 'energetic',
-  voiceName: 'Fenrir',
   scenes: [
     {
       id: 'sc-1',
@@ -143,7 +141,6 @@ const INITIAL_PROJECT_AR: ReelProject = {
   ],
   subtitleStyle: 'hormozi',
   musicMood: 'energetic',
-  voiceName: 'Fenrir',
   scenes: [
     {
       id: 'sc-ar-1',
@@ -302,7 +299,6 @@ export default function App() {
     tone: string;
     targetAudience: string;
     language: string;
-    voiceName: string;
   }) => {
     const latestStatus = getTrialStatus();
     if (latestStatus.isLocked) {
@@ -374,7 +370,6 @@ export default function App() {
 
       setProject((prev) => ({
         ...generatedProject,
-        voiceName: data.voiceName,
         globalBackgroundImage: prev.globalBackgroundImage,
         backgroundDim: prev.backgroundDim,
         subtitleStyle: prev.subtitleStyle || generatedProject.subtitleStyle || 'hormozi',

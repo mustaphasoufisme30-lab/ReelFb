@@ -4,7 +4,6 @@ import {
   Zap,
   Flame,
   Lightbulb,
-  Mic,
   MessageSquare,
   ArrowRight,
   TrendingUp,
@@ -29,7 +28,6 @@ interface IdeaGeneratorProps {
     tone: string;
     targetAudience: string;
     language: string;
-    voiceName: string;
   }) => Promise<void>;
   isLoading: boolean;
   errorMessage?: string | null;
@@ -59,14 +57,6 @@ const TONES_AR = [
   { id: 'mystérieux', label: '🔮 غموض وتشويق', desc: 'سر يكشف لأول مرة' },
 ];
 
-const VOICES = [
-  { id: 'Fenrir', name: 'Fenrir', desc: 'Dynamique & percutant' },
-  { id: 'Kore', name: 'Kore', desc: 'Chaleureuse & captivante' },
-  { id: 'Puck', name: 'Puck', desc: 'Jeune & énergique' },
-  { id: 'Zephyr', name: 'Zephyr', desc: 'Professionnel & clair' },
-  { id: 'Charon', name: 'Charon', desc: 'Profond & autoritaire' },
-];
-
 export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
   onGenerate,
   isLoading,
@@ -78,7 +68,6 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
   const [ideaText, setIdeaText] = useState('');
   const [tone, setTone] = useState('viral');
   const [targetAudience, setTargetAudience] = useState('الجمهور العام');
-  const [voiceName, setVoiceName] = useState('Fenrir');
 
   const isArabic = language === 'arabe';
   const tones = isArabic ? TONES_AR : TONES_FR;
@@ -98,7 +87,6 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
       tone,
       targetAudience,
       language,
-      voiceName,
     });
   };
 
@@ -242,56 +230,34 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
         </div>
       </div>
 
-      {/* Target Audience & Voice Persona */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Audience */}
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
-            {isArabic ? 'الجمهور المستهدف :' : 'Public Cible :'}
-          </label>
-          <select
-            value={targetAudience}
-            onChange={(e) => setTargetAudience(e.target.value)}
-            className="w-full text-xs font-medium bg-white border border-slate-300 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 rounded-xl px-3 py-2.5 focus:border-blue-500 focus:outline-none"
-          >
-            {isArabic ? (
-              <>
-                <option value="الجمهور العام">الجمهور العام (فيسبوك العام)</option>
-                <option value="رواد الأعمال والمستقلين">رواد الأعمال والمهنيين</option>
-                <option value="الشباب والطلاب">الشباب والطلاب</option>
-                <option value="المهتمين بالصحة والرياضة">المهتمين بالصحة والرياضة</option>
-                <option value="صناع المحتوى">صناع المحتوى الرقمي</option>
-              </>
-            ) : (
-              <>
-                <option value="Grand public">Grand public (Facebook général)</option>
-                <option value="Entrepreneurs & Freelances">Entrepreneurs & Freelances</option>
-                <option value="Étudiants & Jeunes actifs">Étudiants & Jeunes actifs</option>
-                <option value="Passionnés de Fitness & Santé">Passionnés de Fitness & Santé</option>
-                <option value="Créateurs de contenu">Créateurs de contenu</option>
-              </>
-            )}
-          </select>
-        </div>
-
-        {/* Voice Persona */}
-        <div>
-          <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
-            <Mic size={13} className="text-purple-600 dark:text-purple-400" />
-            <span>Voix IA Gemini :</span>
-          </label>
-          <select
-            value={voiceName}
-            onChange={(e) => setVoiceName(e.target.value)}
-            className="w-full text-xs font-medium bg-white border border-slate-300 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 rounded-xl px-3 py-2.5 focus:border-blue-500 focus:outline-none"
-          >
-            {VOICES.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} ({v.desc})
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Target Audience */}
+      <div>
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block mb-1.5">
+          {isArabic ? 'الجمهور المستهدف :' : 'Public Cible :'}
+        </label>
+        <select
+          value={targetAudience}
+          onChange={(e) => setTargetAudience(e.target.value)}
+          className="w-full text-xs font-medium bg-white border border-slate-300 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200 rounded-xl px-3 py-2.5 focus:border-blue-500 focus:outline-none"
+        >
+          {isArabic ? (
+            <>
+              <option value="الجمهور العام">الجمهور العام (فيسبوك العام)</option>
+              <option value="رواد الأعمال والمستقلين">رواد الأعمال والمهنيين</option>
+              <option value="الشباب والطلاب">الشباب والطلاب</option>
+              <option value="المهتمين بالصحة والرياضة">المهتمين بالصحة والرياضة</option>
+              <option value="صناع المحتوى">صناع المحتوى الرقمي</option>
+            </>
+          ) : (
+            <>
+              <option value="Grand public">Grand public (Facebook général)</option>
+              <option value="Entrepreneurs & Freelances">Entrepreneurs & Freelances</option>
+              <option value="Étudiants & Jeunes actifs">Étudiants & Jeunes actifs</option>
+              <option value="Passionnés de Fitness & Santé">Passionnés de Fitness & Santé</option>
+              <option value="Créateurs de contenu">Créateurs de contenu</option>
+            </>
+          )}
+        </select>
       </div>
 
       {/* Inline Error Message */}

@@ -26,11 +26,6 @@ export interface ReelScene {
   badge: string;
   soundEffect: SoundEffectType;
   visualTheme: VisualThemeKey;
-  audioUrl?: string; // base64 or object URL of synthesized voiceover
-  audioDuration?: number; // effective spoken duration in seconds (after playbackRate)
-  audioSpeechStart?: number; // detected speech start inside WAV (seconds)
-  audioSpeechEnd?: number; // detected speech end inside WAV (seconds)
-  audioPlaybackRate?: number; // speed factor applied to fit scene duration cleanly
   customImage?: string; // Data URL or object URL of phone image for this scene
 }
 
@@ -49,7 +44,6 @@ export interface ReelProject {
   scenes: ReelScene[];
   subtitleStyle: SubtitleStyle;
   musicMood: 'energetic' | 'dramatic' | 'lofi' | 'hype' | 'minimal';
-  voiceName?: string;
   globalBackgroundImage?: string; // Phone image applied across all scenes
   backgroundDim?: number; // 0 to 1, default 0.45
   backgroundBlur?: number; // 0 to 10 px

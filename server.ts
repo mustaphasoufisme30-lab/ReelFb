@@ -28,7 +28,7 @@ app.get("/api/health", (_req, res) => {
 
 /**
  * Helper: Synthesize a complete 20.0-second 24kHz 16-bit mono WAV buffer in Node.js
- * Mixes background beat + scene transition SFX (whoosh, impact, ding, pop) + AI voiceovers
+ * Mixes background beat + scene transition SFX (whoosh, impact, ding, pop)
  */
 function synthesizeReelAudioWav(
   durationSec: number,
@@ -37,7 +37,6 @@ function synthesizeReelAudioWav(
     startTime: number;
     endTime: number;
     soundEffect?: string;
-    audioUrl?: string;
   }> = []
 ): Buffer {
   const sampleRate = 24000;
@@ -129,64 +128,9 @@ function synthesizeReelAudioWav(
         mix[startSample + i] += Math.sin(2 * Math.PI * freq * t) * env;
       }
     }
-
-    // 3. Mix AI Voiceover WAV if present on the scene (24kHz 16-bit mono WAV)
-    // Trim leading/trailing silence and fit tempo cleanly so voiceover stays synced with scene text
-    if (scene.audioUrl && scene.audioUrl.startsWith("data:audio/")) {
-      try {
-        const base64Part = scene.audioUrl.split(",")[1];
-        if (base64Part) {
-          const wavBuf = Buffer.from(base64Part, "base64");
-          if (wavBuf.length > 44) {
-            const pcmSamples = Math.floor((wavBuf.length - 44) / 2);
-            const silenceThreshold = 490; // ~0.015 * 32768
-            let firstIdx = 0;
-            let lastIdx = pcmSamples - 1;
-
-            for (let i = 0; i < pcmSamples; i++) {
-              if (Math.abs(wavBuf.readInt16LE(44 + i * 2)) > silenceThreshold) {
-                firstIdx = Math.max(0, i - Math.floor(sampleRate * 0.02));
-                break;
-              }
-            }
-            for (let i = pcmSamples - 1; i >= firstIdx; i--) {
-              if (Math.abs(wavBuf.readInt16LE(44 + i * 2)) > silenceThreshold) {
-                lastIdx = Math.min(pcmSamples - 1, i + Math.floor(sampleRate * 0.04));
-                break;
-              }
-            }
-
-            const speechSamples = Math.max(1, lastIdx - firstIdx + 1);
-            const sceneDurSec = Math.max(0.5, (scene.endTime || 20) - (scene.startTime || 0));
-            const maxAllowedSamples = Math.floor(Math.max(0.6, sceneDurSec - 0.12) * sampleRate);
-            const speedRatio =
-              speechSamples > maxAllowedSamples
-                ? Math.min(1.45, speechSamples / maxAllowedSamples)
-                : 1.0;
-            const outSamples = Math.min(
-              maxAllowedSamples,
-              Math.floor(speechSamples / speedRatio)
-            );
-
-            for (let i = 0; i < outSamples && startSample + i < numSamples; i++) {
-              const srcPos = firstIdx + i * speedRatio;
-              const idx0 = Math.min(pcmSamples - 1, Math.floor(srcPos));
-              const idx1 = Math.min(pcmSamples - 1, idx0 + 1);
-              const frac = srcPos - idx0;
-              const s0 = wavBuf.readInt16LE(44 + idx0 * 2);
-              const s1 = wavBuf.readInt16LE(44 + idx1 * 2);
-              const interpolated = s0 + (s1 - s0) * frac;
-              mix[startSample + i] += (interpolated / 32768.0) * 0.9;
-            }
-          }
-        }
-      } catch (e) {
-        // ignore malformed audioUrl
-      }
-    }
   }
 
-  // 4. Encode Float32 mix into 44-byte RIFF WAV header + Int16 PCM
+  // 3. Encode Float32 mix into 44-byte RIFF WAV header + Int16 PCM
   const dataByteLen = numSamples * 2;
   const wavBuffer = Buffer.alloc(44 + dataByteLen);
 
@@ -699,75 +643,6 @@ Style visuel : ${visualStyle}`;
       error: isArabicLang
         ? "تعذر الاتصال بخدمة الذكاء الاصطناعي حالياً. يرجى المحاولة مجدداً."
         : "Impossible de générer le Réel pour le moment. Veuillez réessayer.",
-    });
-  }
-});
-
-// Endpoint: Generate TTS voiceover with gemini-3.8-flash-lite-tts
-app.post("/api/generate-voiceover", async (req, res) => {
-  try {
-    const { text, voiceName = "Fenrir" } = req.body;
-
-    if (!text || typeof text !== "string") {
-      return res.status(400).json({ error: "Texte requis pour la voix off." });
-    }
-
-    const ai = getAiClient();
-    if (!ai) {
-      return res.status(503).json({
-        error: "Synthèse vocale du navigateur activée.",
-        fallbackToBrowser: true,
-      });
-    }
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash-lite-tts",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: text.slice(0, 300),
-              speechMetadata: {
-                style: "Energetic and charismatic social media video narrator",
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: ["Puck", "Charon", "Kore", "Fenrir", "Zephyr"].includes(voiceName)
-                ? voiceName
-                : "Fenrir",
-            },
-          },
-        },
-      },
-    });
-
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-    if (!base64Audio) {
-      return res.status(500).json({ error: "Échec de la génération audio." });
-    }
-
-    res.json({
-      audioBase64: base64Audio,
-      mimeType: "audio/wav",
-    });
-  } catch (err: any) {
-    if (isAuthError(err)) {
-      console.warn("Gemini TTS key unavailable or invalid; falling back to browser speech.");
-    } else {
-      console.warn("TTS generation fallback:", err?.message || err);
-    }
-    res.status(503).json({
-      error: "Synthèse vocale du navigateur activée.",
-      fallbackToBrowser: true,
     });
   }
 });

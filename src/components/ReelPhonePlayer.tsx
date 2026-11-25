@@ -9,16 +9,13 @@ import {
   Heart,
   MessageCircle,
   Share2,
-  Sparkles,
   Music,
-  CheckCircle2,
   Eye,
   EyeOff,
-  Upload,
   Image as ImageIcon,
   Smartphone,
 } from 'lucide-react';
-import { ReelProject, ReelScene } from '../types/reel';
+import { ReelProject } from '../types/reel';
 import { ReelCanvasRenderer } from '../utils/canvasRenderer';
 import { audioEngine } from '../utils/audioEngine';
 import { exportReelVideo, downloadBlob, normalizeProjectScenes } from '../utils/videoExporter';
@@ -52,7 +49,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
   const [exportFormat, setExportFormat] = useState<'mp4' | 'webm'>('mp4');
   const [exportProgress, setExportProgress] = useState(0);
   const [exportStatus, setExportStatus] = useState('');
-  const [isVoiceoverLoading, setIsVoiceoverLoading] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [completedBlob, setCompletedBlob] = useState<Blob | null>(null);
   const [completedUrl, setCompletedUrl] = useState<string | null>(null);
@@ -124,37 +120,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
     });
   }, [currentTime, project, showFbOverlay]);
 
-  // Preload any existing Gemini audioUrls in the background for 0ms synced playback
-  useEffect(() => {
-    project.scenes.forEach((scene) => {
-      if (scene.audioUrl) {
-        audioEngine.preloadVoiceover(scene.audioUrl, scene.duration).catch(() => {});
-      }
-    });
-  }, [project.scenes]);
-
-  const playSceneNarration = (scene: ReelScene, offsetInSceneSec = 0) => {
-    if (isMutedRef.current) return;
-
-    if (scene.audioUrl) {
-      audioEngine
-        .playSyncedVoiceover(scene.audioUrl, scene.duration, offsetInSceneSec)
-        .then((played) => {
-          if (!played && offsetInSceneSec < 0.3) {
-            audioEngine.speakFallback(scene.narration, 'fr-FR', undefined, scene.duration);
-          }
-        })
-        .catch(() => {
-          if (offsetInSceneSec < 0.3) {
-            audioEngine.speakFallback(scene.narration, 'fr-FR', undefined, scene.duration);
-          }
-        });
-    } else if (offsetInSceneSec < 0.35) {
-      // Fallback to browser SpeechSynthesis calibrated to scene duration
-      audioEngine.speakFallback(scene.narration, 'fr-FR', undefined, scene.duration);
-    }
-  };
-
   // Main playback animation loop
   useEffect(() => {
     if (!isPlaying) {
@@ -163,7 +128,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
       audioEngine.stopBgmLoop();
-      audioEngine.stopVoiceover();
       return;
     }
 
@@ -201,8 +165,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
         if (offsetInScene < 0.25 && activeScene.soundEffect && activeScene.soundEffect !== 'none') {
           audioEngine.playSoundEffect(activeScene.soundEffect);
         }
-        // Synced voiceover from exact position inside scene
-        playSceneNarration(activeScene, offsetInScene);
       }
 
       animationFrameRef.current = requestAnimationFrame(loop);
@@ -215,7 +177,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
       audioEngine.stopBgmLoop();
-      audioEngine.stopVoiceover();
     };
   }, [isPlaying, project]);
 
@@ -244,7 +205,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
     currentTimeRef.current = newTime;
     setCurrentTime(newTime);
     lastPlayedSceneIdRef.current = '';
-    audioEngine.stopVoiceover();
     const sceneIdx = project.scenes.findIndex(
       (s) => newTime >= s.startTime && newTime <= s.endTime
     );
@@ -284,66 +244,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
     setExportFormat(formatToExport);
     setIsExporting(true);
   };
-
-  // Generate AI voiceover for all scenes in parallel and pre-sync exact speech timing
-  const handleGenerateAllVoiceovers = async () => {
-    setIsVoiceoverLoading(true);
-    setIsPlaying(false);
-    audioEngine.stopAll();
-    try {
-      const updatedScenes = await Promise.all(
-        project.scenes.map(async (scene) => {
-          try {
-            const res = await fetch('/api/generate-voiceover', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: scene.narration,
-                voiceName: project.voiceName || 'Fenrir',
-              }),
-            });
-            if (!res.ok) return scene;
-            const data = await res.json();
-            if (!data?.audioBase64) return scene;
-
-            const audioUrl = `data:audio/wav;base64,${data.audioBase64}`;
-            const fit = await audioEngine.preloadVoiceover(audioUrl, scene.duration);
-            return {
-              ...scene,
-              audioUrl,
-              audioDuration: fit?.effectiveDuration,
-              audioSpeechStart: fit?.speechStart,
-              audioSpeechEnd: fit?.speechEnd,
-              audioPlaybackRate: fit?.playbackRate,
-            };
-          } catch {
-            return scene;
-          }
-        })
-      );
-
-      onUpdateProject({
-        ...project,
-        scenes: updatedScenes,
-      });
-
-      // Reset to 0s and auto-play so the user immediately hears the synced voiceover
-      currentTimeRef.current = 0;
-      setCurrentTime(0);
-      lastPlayedSceneIdRef.current = '';
-      currentSceneIndexRef.current = 0;
-      onSceneChange(0);
-      if (updatedScenes.some((s) => Boolean(s.audioUrl))) {
-        setIsPlaying(true);
-      }
-    } catch (err) {
-      console.warn('Voiceover generation skipped or failed:', err);
-    } finally {
-      setIsVoiceoverLoading(false);
-    }
-  };
-
-  const hasSyncedVoiceover = project.scenes.some((s) => Boolean(s.audioUrl));
 
   const activeScene =
     project.scenes.find(
@@ -564,31 +464,6 @@ export const ReelPhonePlayer: React.FC<ReelPhonePlayerProps> = ({
               {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </button>
           </div>
-
-          {/* Quick Voiceover Gen Button */}
-          <button
-            onClick={handleGenerateAllVoiceovers}
-            disabled={isVoiceoverLoading}
-            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border transition-colors cursor-pointer ${
-              hasSyncedVoiceover
-                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 dark:border-emerald-700/60'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700'
-            }`}
-            title="Générer et synchroniser la voix off IA Gemini pour chaque scène"
-          >
-            {hasSyncedVoiceover && !isVoiceoverLoading ? (
-              <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <Sparkles size={14} className="text-amber-500 dark:text-amber-400" />
-            )}
-            <span>
-              {isVoiceoverLoading
-                ? 'Sync voix IA...'
-                : hasSyncedVoiceover
-                  ? 'Voix IA synchronisée'
-                  : 'Voix off IA'}
-            </span>
-          </button>
         </div>
 
         {/* Quick Phone Photo Upload Button */}

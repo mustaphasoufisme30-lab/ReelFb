@@ -249,7 +249,6 @@ async function exportDeterministicMp4(
         startTime: s.startTime,
         endTime: s.endTime,
         soundEffect: s.soundEffect,
-        audioUrl: s.audioUrl,
       })),
       filename: `${cleanTitle}-20s.mp4`,
     }),

@@ -121,8 +121,8 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({
               <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
               <span>
                 {isArabic
-                  ? 'صوت ذكاء اصطناعي Gemini متزامن مع النص تلقائياً'
-                  : 'Voix IA Gemini synchronisée automatiquement avec le texte'}
+                  ? 'نصوص متحركة احترافية مع مؤثرات صوتية وموسيقى خلفية'
+                  : 'Sous-titres animés pro avec musique de fond et effets sonores'}
               </span>
             </li>
             <li className="flex items-center gap-2">
