@@ -1,8 +1,30 @@
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
+function resolveGeminiApiKey(): string {
+  const candidates = [
+    process.env.GEMINI_API_KEY,
+    process.env.GOOGLE_API_KEY,
+    process.env.API_KEY,
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    process.env.VITE_GEMINI_API_KEY,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const cleaned = String(candidate)
+      .trim()
+      .replace(/^(?:GEMINI_API_KEY|GOOGLE_API_KEY|API_KEY)\s*=\s*/i, "")
+      .replace(/^["']+|["']+$/g, "")
+      .replace(/\s+/g, "");
+    if (cleaned && cleaned !== "MY_GEMINI_API_KEY" && cleaned.length >= 10) {
+      return cleaned;
+    }
+  }
+  return "";
+}
+
 function getAiClient(): GoogleGenAI | null {
-  const rawKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "");
-  if (!rawKey || rawKey === "MY_GEMINI_API_KEY" || rawKey.length < 10) {
+  const rawKey = resolveGeminiApiKey();
+  if (!rawKey) {
     return null;
   }
   return new GoogleGenAI({
@@ -15,18 +37,22 @@ function getAiClient(): GoogleGenAI | null {
   });
 }
 
-function isAuthError(err: any): boolean {
-  const status = err?.status || err?.code;
+function isInvalidKeyError(err: any): boolean {
+  const status = Number(err?.status || err?.code);
   const msg = String(err?.message || "");
   return (
     status === 401 ||
-    status === 403 ||
     msg.includes("API key not valid") ||
     msg.includes("UNAUTHENTICATED") ||
     msg.includes("API_KEY_INVALID") ||
-    msg.includes("PERMISSION_DENIED") ||
     msg.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED")
   );
+}
+
+function isAuthError(err: any): boolean {
+  const status = Number(err?.status || err?.code);
+  const msg = String(err?.message || "");
+  return isInvalidKeyError(err) || status === 403 || msg.includes("PERMISSION_DENIED");
 }
 
 function isQuotaError(err: any): boolean {
@@ -200,7 +226,7 @@ Style visuel : ${visualStyle}`;
         14000
       );
     } catch (primaryErr: any) {
-      if (isAuthError(primaryErr)) throw primaryErr;
+      if (isInvalidKeyError(primaryErr)) throw primaryErr;
       response = await withTimeout(
         ai.models.generateContent({
           model: "gemini-3.1-flash-lite",
