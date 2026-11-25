@@ -288,6 +288,156 @@ class AudioEngine {
     }
   }
 
+  private decodedVoiceCache = new Map<
+    string,
+    { buffer: AudioBuffer; speechStart: number; speechEnd: number }
+  >();
+
+  private getCacheKey(audioUrl: string): string {
+    return `${audioUrl.length}:${audioUrl.slice(0, 64)}:${audioUrl.slice(-32)}`;
+  }
+
+  private dataUrlToArrayBuffer(audioUrl: string): ArrayBuffer | null {
+    const commaIdx = audioUrl.indexOf(',');
+    if (commaIdx === -1) return null;
+    const base64 = audioUrl.slice(commaIdx + 1);
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  private detectSpeechBounds(buffer: AudioBuffer): { speechStart: number; speechEnd: number } {
+    const data = buffer.getChannelData(0);
+    const sr = buffer.sampleRate;
+    const threshold = 0.015;
+    let firstIdx = 0;
+    let lastIdx = data.length - 1;
+
+    for (let i = 0; i < data.length; i++) {
+      if (Math.abs(data[i]) > threshold) {
+        firstIdx = Math.max(0, i - Math.floor(sr * 0.02));
+        break;
+      }
+    }
+    for (let i = data.length - 1; i >= firstIdx; i--) {
+      if (Math.abs(data[i]) > threshold) {
+        lastIdx = Math.min(data.length - 1, i + Math.floor(sr * 0.04));
+        break;
+      }
+    }
+
+    const speechStart = firstIdx / sr;
+    const speechEnd = Math.max(speechStart + 0.2, lastIdx / sr);
+    return { speechStart, speechEnd };
+  }
+
+  public computeVoiceFit(
+    speechStart: number,
+    speechEnd: number,
+    sceneDuration: number
+  ): { playbackRate: number; effectiveDuration: number } {
+    const rawSpeechLen = Math.max(0.25, speechEnd - speechStart);
+    const targetMax = Math.max(0.6, sceneDuration - 0.12);
+    // Speed up smoothly only if Gemini's narration is longer than the scene window
+    const playbackRate =
+      rawSpeechLen > targetMax ? Math.min(1.45, rawSpeechLen / targetMax) : 1.0;
+    const effectiveDuration = Math.min(sceneDuration, rawSpeechLen / playbackRate);
+    return { playbackRate, effectiveDuration };
+  }
+
+  // Pre-decode Gemini WAV so playback starts with 0ms latency and exact speech bounds
+  public async preloadVoiceover(
+    audioUrl: string,
+    sceneDuration: number
+  ): Promise<{
+    speechStart: number;
+    speechEnd: number;
+    playbackRate: number;
+    effectiveDuration: number;
+  } | null> {
+    this.init();
+    if (!this.ctx || !audioUrl) return null;
+
+    const key = this.getCacheKey(audioUrl);
+    let entry = this.decodedVoiceCache.get(key);
+
+    if (!entry) {
+      try {
+        let arrayBuffer = this.dataUrlToArrayBuffer(audioUrl);
+        if (!arrayBuffer) {
+          const res = await fetch(audioUrl);
+          arrayBuffer = await res.arrayBuffer();
+        }
+        const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer.slice(0));
+        const { speechStart, speechEnd } = this.detectSpeechBounds(audioBuffer);
+        entry = { buffer: audioBuffer, speechStart, speechEnd };
+        this.decodedVoiceCache.set(key, entry);
+      } catch (err) {
+        console.warn('Failed to preload Gemini voiceover:', err);
+        return null;
+      }
+    }
+
+    const { playbackRate, effectiveDuration } = this.computeVoiceFit(
+      entry.speechStart,
+      entry.speechEnd,
+      sceneDuration
+    );
+    return {
+      speechStart: entry.speechStart,
+      speechEnd: entry.speechEnd,
+      playbackRate,
+      effectiveDuration,
+    };
+  }
+
+  // Play pre-decoded Gemini TTS voiceover in lockstep with scene timeline offset
+  public async playSyncedVoiceover(
+    audioUrl: string,
+    sceneDuration: number,
+    offsetInSceneSec = 0
+  ): Promise<boolean> {
+    this.init();
+    if (!this.ctx || !this.voiceGain || this.isMuted) return false;
+
+    const key = this.getCacheKey(audioUrl);
+    let entry = this.decodedVoiceCache.get(key);
+    if (!entry) {
+      await this.preloadVoiceover(audioUrl, sceneDuration);
+      entry = this.decodedVoiceCache.get(key);
+    }
+    if (!entry) return false;
+
+    this.stopVoiceover();
+
+    const { playbackRate } = this.computeVoiceFit(
+      entry.speechStart,
+      entry.speechEnd,
+      sceneDuration
+    );
+
+    const safeOffset = Math.max(0, offsetInSceneSec);
+    const bufferOffset = entry.speechStart + safeOffset * playbackRate;
+    const remainingBufferSec = entry.speechEnd - bufferOffset;
+    if (remainingBufferSec <= 0.03) return true;
+
+    try {
+      const source = this.ctx.createBufferSource();
+      source.buffer = entry.buffer;
+      source.playbackRate.value = playbackRate;
+      source.connect(this.voiceGain);
+      this.currentVoiceSource = source;
+      source.start(0, bufferOffset, remainingBufferSec);
+      return true;
+    } catch (err) {
+      console.warn('Failed to play synced voiceover:', err);
+      return false;
+    }
+  }
+
   // Play audio buffer (WAV) generated from Gemini TTS
   public async playVoiceoverBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
     this.init();
@@ -302,7 +452,7 @@ class AudioEngine {
       this.currentVoiceSource = source;
       source.start();
     } catch (err) {
-      console.warn("Failed to decode audio data:", err);
+      console.warn('Failed to decode audio data:', err);
     }
   }
 
@@ -319,8 +469,13 @@ class AudioEngine {
   }
 
   // Fallback: Web Speech API synthesis with multi-language support (French, Arabic, English)
-  public speakFallback(text: string, lang = 'fr-FR', onEnd?: () => void) {
-    if (!('speechSynthesis' in window)) return;
+  public speakFallback(
+    text: string,
+    lang = 'fr-FR',
+    onEnd?: () => void,
+    sceneDuration?: number
+  ) {
+    if (!('speechSynthesis' in window) || !text.trim()) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
 
@@ -328,7 +483,6 @@ class AudioEngine {
     const hasArabic = /[\u0600-\u06FF]/.test(text);
     if (hasArabic) {
       utterance.lang = 'ar-SA';
-      // Find native Arabic voice if available
       const voices = window.speechSynthesis.getVoices();
       const arabicVoice = voices.find(
         (v) => v.lang.startsWith('ar') || v.name.toLowerCase().includes('arabic')
@@ -340,8 +494,15 @@ class AudioEngine {
       utterance.lang = lang;
     }
 
-    utterance.rate = 1.15; // upbeat pace for reels
-    utterance.pitch = 1.05;
+    // Calibrate speech rate to match scene duration closely
+    if (sceneDuration && sceneDuration > 0) {
+      const wordCount = text.trim().split(/\s+/).length;
+      const estimatedRate = wordCount / (sceneDuration * 2.5);
+      utterance.rate = Math.max(0.95, Math.min(1.4, estimatedRate));
+    } else {
+      utterance.rate = 1.15;
+    }
+    utterance.pitch = 1.02;
     if (onEnd) utterance.onend = onEnd;
     window.speechSynthesis.speak(utterance);
   }

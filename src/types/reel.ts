@@ -27,6 +27,10 @@ export interface ReelScene {
   soundEffect: SoundEffectType;
   visualTheme: VisualThemeKey;
   audioUrl?: string; // base64 or object URL of synthesized voiceover
+  audioDuration?: number; // effective spoken duration in seconds (after playbackRate)
+  audioSpeechStart?: number; // detected speech start inside WAV (seconds)
+  audioSpeechEnd?: number; // detected speech end inside WAV (seconds)
+  audioPlaybackRate?: number; // speed factor applied to fit scene duration cleanly
   customImage?: string; // Data URL or object URL of phone image for this scene
 }
 

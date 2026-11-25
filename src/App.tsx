@@ -16,6 +16,7 @@ import {
   Sun,
   Moon,
   AlertCircle,
+  Lock,
 } from 'lucide-react';
 import { ReelProject } from './types/reel';
 import { IdeaGenerator } from './components/IdeaGenerator';
@@ -24,6 +25,14 @@ import { SubtitleStylePicker } from './components/SubtitleStylePicker';
 import { BackgroundImageManager } from './components/BackgroundImageManager';
 import { FacebookGrowthKit } from './components/FacebookGrowthKit';
 import { ReelPhonePlayer } from './components/ReelPhonePlayer';
+import { UnlockModal, WhatsAppIcon } from './components/UnlockModal';
+import {
+  TrialStatus,
+  WHATSAPP_DISPLAY_NUMBER,
+  consumeFreeTest,
+  getTrialStatus,
+  getWhatsAppUnlockUrl,
+} from './utils/trialManager';
 
 // French starter Reel project
 const INITIAL_PROJECT_FR: ReelProject = {
@@ -214,6 +223,8 @@ export default function App() {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [trialStatus, setTrialStatus] = useState<TrialStatus>(() => getTrialStatus());
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const [notification, setNotification] = useState<{
     message: string;
     type: 'success' | 'error';
@@ -293,6 +304,13 @@ export default function App() {
     language: string;
     voiceName: string;
   }) => {
+    const latestStatus = getTrialStatus();
+    if (latestStatus.isLocked) {
+      setTrialStatus(latestStatus);
+      setIsUnlockModalOpen(true);
+      return;
+    }
+
     setIsGenerating(true);
     setGenerationError(null);
 
@@ -364,6 +382,8 @@ export default function App() {
       }));
       setCurrentSceneIndex(0);
       setActiveTab('scenes');
+      const nextTrial = consumeFreeTest();
+      setTrialStatus(nextTrial);
       showToast(
         data.language === 'arabe'
           ? 'تم إنشاء الريل الخاص بك بنجاح ! 🚀'
@@ -489,10 +509,30 @@ export default function App() {
               )}
             </button>
 
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700/60 hidden lg:flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-              <span>Format 20s Précis</span>
-            </span>
+            {/* WhatsApp Contact / Unlock Button */}
+            {trialStatus.isLocked ? (
+              <button
+                type="button"
+                onClick={() => setIsUnlockModalOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-black shadow-sm transition cursor-pointer"
+                title={`Contacter nous sur WhatsApp (${WHATSAPP_DISPLAY_NUMBER})`}
+              >
+                <WhatsAppIcon size={14} />
+                <span className="hidden md:inline">Déverrouiller</span>
+              </button>
+            ) : (
+              <a
+                href={getWhatsAppUnlockUrl(isCurrentArabic)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#25D366]/15 hover:bg-[#25D366]/25 text-[#128C7E] dark:text-[#25D366] border border-[#25D366]/30 text-xs font-bold transition"
+                title={`Contacter nous sur WhatsApp : ${WHATSAPP_DISPLAY_NUMBER}`}
+              >
+                <WhatsAppIcon size={14} />
+                <span className="hidden lg:inline">Contacter nous</span>
+                <span className="font-mono text-[11px]">{WHATSAPP_DISPLAY_NUMBER}</span>
+              </a>
+            )}
           </div>
         </div>
       </header>
@@ -582,6 +622,8 @@ export default function App() {
                     onGenerate={handleGenerateReel}
                     isLoading={isGenerating}
                     errorMessage={generationError}
+                    trialStatus={trialStatus}
+                    onOpenUnlockModal={() => setIsUnlockModalOpen(true)}
                   />
                 </div>
               )}
@@ -697,6 +739,23 @@ export default function App() {
           </span>
         </div>
       </footer>
+
+      {/* Single Free Trial Unlock Modal (WhatsApp 0635230749) */}
+      <UnlockModal
+        isOpen={isUnlockModalOpen}
+        onClose={() => setIsUnlockModalOpen(false)}
+        onUnlocked={() => {
+          setTrialStatus(getTrialStatus());
+          setIsUnlockModalOpen(false);
+          showToast(
+            isCurrentArabic
+              ? 'تم فتح النسخة الكاملة بنجاح ! 🎉'
+              : "Application déverrouillée avec succès ! 🎉",
+            'success'
+          );
+        }}
+        isArabic={isCurrentArabic}
+      />
     </div>
   );
 }

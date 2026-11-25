@@ -74,13 +74,14 @@ export class ReelCanvasRenderer {
     // 5. Draw Big Bold Headline (overlayTitle)
     this.drawHeadline(currentScene.overlayTitle, subtitleStyle, currentTime, currentScene.startTime);
 
-    // 6. Draw Animated Karaoke Subtitles / Narration
+    // 6. Draw Animated Karaoke Subtitles / Narration (synced to Gemini voice duration when available)
     this.drawNarrationKaraoke(
       currentScene.narration,
       currentScene.startTime,
       currentScene.endTime,
       currentTime,
-      subtitleStyle
+      subtitleStyle,
+      currentScene.audioDuration
     );
 
     // 7. Draw Audio Visualizer Waveform at bottom
@@ -442,7 +443,8 @@ export class ReelCanvasRenderer {
     sceneStart: number,
     sceneEnd: number,
     currentTime: number,
-    _style: SubtitleStyle
+    _style: SubtitleStyle,
+    audioDuration?: number
   ) {
     if (!narration) return;
     const ctx = this.ctx;
@@ -450,11 +452,39 @@ export class ReelCanvasRenderer {
     const boxY = 820;
     const isAr = this.isArabic(narration);
 
-    const words = narration.split(' ');
-    const totalWords = words.length;
-    const sceneDuration = sceneEnd - sceneStart;
-    const progress = Math.min(1, Math.max(0, (currentTime - sceneStart) / sceneDuration));
-    const activeWordIndex = Math.floor(progress * totalWords);
+    const words = narration.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return;
+
+    const sceneDuration = Math.max(0.5, sceneEnd - sceneStart);
+    // Sync karaoke end directly to the actual spoken Gemini voice duration when present
+    const speechWindow =
+      audioDuration && audioDuration > 0.25
+        ? Math.min(sceneDuration, audioDuration)
+        : sceneDuration * 0.94;
+
+    const elapsedInScene = Math.max(0, currentTime - sceneStart);
+    const progress = Math.min(1, elapsedInScene / Math.max(0.25, speechWindow));
+
+    // Weight each word by spoken length + punctuation pause so highlight tracks real speech cadence
+    const wordWeights = words.map((word) => {
+      const cleanLen = word.replace(/[^\p{L}\p{N}]/gu, '').length;
+      let weight = Math.max(2, cleanLen);
+      if (/[،,;:]$/.test(word)) weight += 2.5;
+      if (/[.!؟?]$/.test(word)) weight += 4;
+      return weight;
+    });
+    const totalWeight = wordWeights.reduce((acc, val) => acc + val, 0);
+    const targetWeight = progress * totalWeight;
+
+    let cumulative = 0;
+    let activeWordIndex = words.length - 1;
+    for (let i = 0; i < wordWeights.length; i++) {
+      cumulative += wordWeights[i];
+      if (targetWeight <= cumulative) {
+        activeWordIndex = i;
+        break;
+      }
+    }
 
     ctx.save();
     ctx.direction = isAr ? 'rtl' : 'ltr';

@@ -131,21 +131,52 @@ function synthesizeReelAudioWav(
     }
 
     // 3. Mix AI Voiceover WAV if present on the scene (24kHz 16-bit mono WAV)
+    // Trim leading/trailing silence and fit tempo cleanly so voiceover stays synced with scene text
     if (scene.audioUrl && scene.audioUrl.startsWith("data:audio/")) {
       try {
         const base64Part = scene.audioUrl.split(",")[1];
         if (base64Part) {
           const wavBuf = Buffer.from(base64Part, "base64");
-          // Skip 44-byte RIFF WAV header
           if (wavBuf.length > 44) {
             const pcmSamples = Math.floor((wavBuf.length - 44) / 2);
-            const maxSceneSamples = Math.floor(
-              ((scene.endTime || 20) - (scene.startTime || 0)) * sampleRate
+            const silenceThreshold = 490; // ~0.015 * 32768
+            let firstIdx = 0;
+            let lastIdx = pcmSamples - 1;
+
+            for (let i = 0; i < pcmSamples; i++) {
+              if (Math.abs(wavBuf.readInt16LE(44 + i * 2)) > silenceThreshold) {
+                firstIdx = Math.max(0, i - Math.floor(sampleRate * 0.02));
+                break;
+              }
+            }
+            for (let i = pcmSamples - 1; i >= firstIdx; i--) {
+              if (Math.abs(wavBuf.readInt16LE(44 + i * 2)) > silenceThreshold) {
+                lastIdx = Math.min(pcmSamples - 1, i + Math.floor(sampleRate * 0.04));
+                break;
+              }
+            }
+
+            const speechSamples = Math.max(1, lastIdx - firstIdx + 1);
+            const sceneDurSec = Math.max(0.5, (scene.endTime || 20) - (scene.startTime || 0));
+            const maxAllowedSamples = Math.floor(Math.max(0.6, sceneDurSec - 0.12) * sampleRate);
+            const speedRatio =
+              speechSamples > maxAllowedSamples
+                ? Math.min(1.45, speechSamples / maxAllowedSamples)
+                : 1.0;
+            const outSamples = Math.min(
+              maxAllowedSamples,
+              Math.floor(speechSamples / speedRatio)
             );
-            const samplesToCopy = Math.min(pcmSamples, maxSceneSamples);
-            for (let i = 0; i < samplesToCopy && startSample + i < numSamples; i++) {
-              const int16 = wavBuf.readInt16LE(44 + i * 2);
-              mix[startSample + i] += (int16 / 32768.0) * 0.85;
+
+            for (let i = 0; i < outSamples && startSample + i < numSamples; i++) {
+              const srcPos = firstIdx + i * speedRatio;
+              const idx0 = Math.min(pcmSamples - 1, Math.floor(srcPos));
+              const idx1 = Math.min(pcmSamples - 1, idx0 + 1);
+              const frac = srcPos - idx0;
+              const s0 = wavBuf.readInt16LE(44 + idx0 * 2);
+              const s1 = wavBuf.readInt16LE(44 + idx1 * 2);
+              const interpolated = s0 + (s1 - s0) * frac;
+              mix[startSample + i] += (interpolated / 32768.0) * 0.9;
             }
           }
         }

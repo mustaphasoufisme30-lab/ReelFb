@@ -10,9 +10,18 @@ import {
   TrendingUp,
   Globe2,
   AlertCircle,
+  Lock,
+  KeyRound,
+  CheckCircle2,
 } from 'lucide-react';
 import { PRESET_IDEAS } from '../data/presetIdeas';
 import { PresetIdea } from '../types/reel';
+import {
+  TrialStatus,
+  WHATSAPP_DISPLAY_NUMBER,
+  getWhatsAppUnlockUrl,
+} from '../utils/trialManager';
+import { WhatsAppIcon } from './UnlockModal';
 
 interface IdeaGeneratorProps {
   onGenerate: (data: {
@@ -24,6 +33,8 @@ interface IdeaGeneratorProps {
   }) => Promise<void>;
   isLoading: boolean;
   errorMessage?: string | null;
+  trialStatus: TrialStatus;
+  onOpenUnlockModal: () => void;
 }
 
 const LANGUAGES = [
@@ -60,6 +71,8 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
   onGenerate,
   isLoading,
   errorMessage,
+  trialStatus,
+  onOpenUnlockModal,
 }) => {
   const [language, setLanguage] = useState<'arabe' | 'français' | 'anglais'>('arabe');
   const [ideaText, setIdeaText] = useState('');
@@ -75,6 +88,10 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (trialStatus.isLocked) {
+      onOpenUnlockModal();
+      return;
+    }
     if (!ideaText.trim() || isLoading) return;
     onGenerate({
       idea: ideaText.trim(),
@@ -289,11 +306,100 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
         </div>
       )}
 
+      {/* Single Free Trial Status / Unlock Banner */}
+      {trialStatus.isLocked ? (
+        <div
+          dir={isArabic ? 'rtl' : 'ltr'}
+          className="p-4 rounded-2xl bg-amber-50 border border-amber-200 dark:bg-amber-950/35 dark:border-amber-700/50 space-y-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Lock size={16} />
+            </div>
+            <div className="text-xs">
+              <p className="font-black text-slate-900 dark:text-white">
+                {isArabic
+                  ? 'لقد استنفدت التجربة المجانية الواحدة'
+                  : "Votre test gratuit unique a été utilisé"}
+              </p>
+              <p className="text-slate-600 dark:text-slate-300 mt-0.5">
+                {isArabic
+                  ? 'لفتح التطبيق الكامل وإنشاء ريلز غير محدودة، تواصل معنا عبر واتساب الآن.'
+                  : "Contactez-nous sur WhatsApp pour déverrouiller l'application et créer sans limite."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <a
+              href={getWhatsAppUnlockUrl(isArabic)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-black text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition"
+            >
+              <WhatsAppIcon size={17} />
+              <span>
+                {isArabic
+                  ? `تواصل معنا — ${WHATSAPP_DISPLAY_NUMBER}`
+                  : `Contacter nous — ${WHATSAPP_DISPLAY_NUMBER}`}
+              </span>
+            </a>
+
+            <button
+              type="button"
+              onClick={onOpenUnlockModal}
+              className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              <KeyRound size={14} />
+              <span>{isArabic ? 'إدخال كود التفعيل' : "J'ai un code"}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          dir={isArabic ? 'rtl' : 'ltr'}
+          className="flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-slate-100/90 border border-slate-200 dark:bg-slate-900/70 dark:border-slate-800 text-xs"
+        >
+          {trialStatus.isUnlocked ? (
+            <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+              <CheckCircle2 size={14} />
+              <span>
+                {isArabic ? 'النسخة الكاملة مفعّلة بدون حدود' : 'Application déverrouillée (Illimité)'}
+              </span>
+            </span>
+          ) : (
+            <>
+              <span className="font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                <Sparkles size={14} className="text-amber-500" />
+                <span>
+                  {isArabic
+                    ? 'تجربة مجانية واحدة متاحة قبل فتح التطبيق'
+                    : "1 test gratuit inclus avant déverrouillage"}
+                </span>
+              </span>
+              <a
+                href={getWhatsAppUnlockUrl(isArabic)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-bold text-[#128C7E] dark:text-[#25D366] hover:underline shrink-0"
+              >
+                <WhatsAppIcon size={14} />
+                <span>{WHATSAPP_DISPLAY_NUMBER}</span>
+              </a>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={isLoading || !ideaText.trim()}
-        className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black text-sm tracking-wide shadow-xl shadow-blue-600/20 dark:shadow-blue-900/30 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer"
+        disabled={isLoading || (!trialStatus.isLocked && !ideaText.trim())}
+        className={`w-full py-3.5 px-6 rounded-2xl font-black text-sm tracking-wide shadow-xl flex items-center justify-center gap-2 transition-all transform active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed group cursor-pointer ${
+          trialStatus.isLocked
+            ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-white shadow-orange-600/20'
+            : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-blue-600/20 dark:shadow-blue-900/30'
+        }`}
       >
         {isLoading ? (
           <>
@@ -303,6 +409,16 @@ export const IdeaGenerator: React.FC<IdeaGeneratorProps> = ({
                 ? 'جاري إنشاء وتجهيز الريل (20 ثانية)...'
                 : 'Génération du Réel 20s en cours...'}
             </span>
+          </>
+        ) : trialStatus.isLocked ? (
+          <>
+            <Lock size={18} />
+            <span>
+              {isArabic
+                ? 'افتح التطبيق الآن عبر واتساب'
+                : "DÉVERROUILLER L'APPLICATION"}
+            </span>
+            <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
           </>
         ) : (
           <>
